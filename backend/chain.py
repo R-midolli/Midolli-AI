@@ -128,8 +128,8 @@ def _try_gemini(query: str, context_chunks: list[dict], history: list, api_key: 
                 "api_used": f"Gemini ({model_name} / {key_name})",
             }
     except Exception as e:
-        print(f"[WARNING] Gemini ({model_name} / {key_name}) failed: {e}")
-    return None
+        print(f"[WARNING] Gemini ({model_name} / {key_name}) failed: {e}", flush=True)
+        raise Exception(f"Gemini {model_name} failed: {e}")
 
 
 def _try_nvidia(query: str, context_chunks: list[dict], history: list) -> dict | None:
@@ -137,7 +137,7 @@ def _try_nvidia(query: str, context_chunks: list[dict], history: list) -> dict |
     try:
         nvidia_key = os.getenv("NVIDIA_API_KEY")
         if not nvidia_key:
-            return None
+            raise Exception("NVIDIA_API_KEY not found in environment")
 
         client = OpenAI(
             base_url="https://integrate.api.nvidia.com/v1",
@@ -174,8 +174,8 @@ def _try_nvidia(query: str, context_chunks: list[dict], history: list) -> dict |
                 "api_used": f"NVIDIA ({NVIDIA_MODEL})",
             }
     except Exception as e:
-        print(f"[WARNING] NVIDIA failed: {e}")
-    return None
+        print(f"[WARNING] NVIDIA failed: {e}", flush=True)
+        raise Exception(f"NVIDIA failed: {e}")
 
 
 def _is_complex_query(query: str, history: list) -> bool:
