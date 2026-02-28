@@ -22,8 +22,9 @@ COLLECTION_NAME = "midolli_knowledge"
 EMBEDDING_MODEL = "models/gemini-embedding-001"
 
 # LLM Models
-GEMINI_PRIMARY = "gemini-3-flash-preview"
-GEMINI_SECONDARY = "gemini-2.5-flash" 
+GEMINI_FAST = "gemini-flash-lite-latest"
+GEMINI_NORMAL = "gemini-3-flash-preview"
+GEMINI_BACKUP = "gemini-2.5-flash"
 NVIDIA_MODEL = "meta/llama-3.1-70b-instruct" # NVIDIA Build (OpenAI compatible)
 
 TOP_K = 10
@@ -178,20 +179,21 @@ def _try_nvidia(query: str, context_chunks: list[dict], history: list) -> dict |
         raise Exception(f"NVIDIA failed: {e}")
 
 
-def _is_complex_query(query: str, history: list) -> bool:
-    """Heuristic to decide if the query requires a heavier reasoning model."""
-    if len(history) >= 4:
-        return True
-    if len(query) > 200:
-        return True
+def _query_category(query: str, history: list) -> str:
+    """Heuristic to decide if the query requires a fast, normal, or heavy reasoning model."""
+    if len(history) >= 4 or len(query) > 200:
+        return "complex"
     
-    complex_keywords = ["analise", "resuma", "compare", "diferença", "explique em detalhes", "summarize", "analyze", "compare", "difference"]
+    complex_keywords = ["analise", "resuma", "compare", "diferença", "explique", "synthesize", "analyze", "difference", "pourquoi", "comment", "expliquer"]
     query_lower = query.lower()
     for kw in complex_keywords:
         if kw in query_lower:
-            return True
+            return "complex"
             
-    return False
+    if len(query) < 40 and len(history) <= 2:
+        return "simple"
+        
+    return "normal"
 
 
 def answer(query: str, history: list | None = None) -> dict:
@@ -222,11 +224,11 @@ def answer(query: str, history: list | None = None) -> dict:
 
         # Step 2: Route via LLMRouter heuristic
         history_safe = history or []
-        is_complex = _is_complex_query(query, history_safe)
+        category = _query_category(query, history_safe)
 
         errors = []
-        if is_complex:
-            # Complex Route: NVIDIA -> Gemini 3 -> Gemini 2.5
+        if category == "complex":
+            # Complex Route: NVIDIA -> Gemini Normal -> Gemini Backup
             try:
                 result = _try_nvidia(query, context_chunks, history_safe)
                 if result:
@@ -236,7 +238,7 @@ def answer(query: str, history: list | None = None) -> dict:
             
             if key1:
                 try:
-                    result = _try_gemini(query, context_chunks, history_safe, key1, "KEY_1", GEMINI_PRIMARY)
+                    result = _try_gemini(query, context_chunks, history_safe, key1, "KEY_1", GEMINI_NORMAL)
                     if result:
                         return result
                 except Exception as e:
@@ -244,17 +246,35 @@ def answer(query: str, history: list | None = None) -> dict:
                 
             if key2:
                 try:
-                    result = _try_gemini(query, context_chunks, history_safe, key2, "KEY_2", GEMINI_SECONDARY)
+                    result = _try_gemini(query, context_chunks, history_safe, key2, "KEY_2", GEMINI_BACKUP)
                     if result:
                         return result
                 except Exception as e:
                     errors.append(f"G2:{e}")
                 
-        else:
-            # Fast Route: Gemini 3 -> Gemini 2.5 -> NVIDIA
+        elif category == "simple":
+            # Fast Route (Greeting / Small Talk): Gemini Fast -> Gemini Normal
+            if key2:
+                try:
+                    result = _try_gemini(query, context_chunks, history_safe, key2, "KEY_2", GEMINI_FAST)
+                    if result:
+                        return result
+                except Exception as e:
+                    errors.append(f"G2:{e}")
+                    
             if key1:
                 try:
-                    result = _try_gemini(query, context_chunks, history_safe, key1, "KEY_1", GEMINI_PRIMARY)
+                    result = _try_gemini(query, context_chunks, history_safe, key1, "KEY_1", GEMINI_NORMAL)
+                    if result:
+                        return result
+                except Exception as e:
+                    errors.append(f"G1:{e}")
+                    
+        else:
+            # Normal Route: Gemini Normal -> Gemini Fast -> NVIDIA
+            if key1:
+                try:
+                    result = _try_gemini(query, context_chunks, history_safe, key1, "KEY_1", GEMINI_NORMAL)
                     if result:
                         return result
                 except Exception as e:
@@ -262,7 +282,7 @@ def answer(query: str, history: list | None = None) -> dict:
                 
             if key2:
                 try:
-                    result = _try_gemini(query, context_chunks, history_safe, key2, "KEY_2", GEMINI_SECONDARY)
+                    result = _try_gemini(query, context_chunks, history_safe, key2, "KEY_2", GEMINI_FAST)
                     if result:
                         return result
                 except Exception as e:
