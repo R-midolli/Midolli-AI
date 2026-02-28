@@ -6,3 +6,4 @@ backend/data/vectorstore/
 .DS_Store
 Thumbs.db
 .coverage
+.agent/sources/*.pdf
