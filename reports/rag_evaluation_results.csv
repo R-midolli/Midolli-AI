@@ -1,0 +1,149 @@
+question_id,category,question,expected,generated,score,reasoning,api_used
+1,metrics,Quel est l'AUC-ROC du projet de Churn et quel modèle a été utilisé ?,L'AUC-ROC est de 0.84 et le modèle utilisé est XGBoost avec interprétabilité SHAP.,"Pour le projet de prédiction de churn, l'AUC-ROC obtenue sur le jeu de test est de **0.84**.
+
+Le modèle de Machine Learning utilisé pour cette solution est `XGBoost`.",4,"The generated answer correctly states the AUC-ROC score (0.84) and the model used (XGBoost), which are the core facts. However, it omits the information about 'SHAP interpretability' which was present in the expected answer. This constitutes a minor omission.",Gemini (gemini-2.5-flash / KEY_2)
+2,cross-project,Compare les technologies de base de données utilisées entre le projet Retail BA (Projet 1) et le projet FMCG Pricing Monitor (Projet 4).,Les deux projets utilisent DuckDB comme base de données analytique.,"Pour le projet ""Retail BA Diagnostic"" (Projet 1), Rafael a utilisé `DuckDB` dans sa stack technique.
+
+De manière similaire, le projet ""FMCG Pricing Monitor"" (Projet 4) a également implémenté une modélisation en étoile avec `DuckDB` pour le stockage et l'analyse des données.
+
+En résumé, les deux projets ont en commun l'utilisation de `DuckDB` comme technologie de base de données.",5,"The generated answer explicitly states that both 'Retail BA Diagnostic' (Project 1) and 'FMCG Pricing Monitor' (Projet 4) use DuckDB. It further clarifies that DuckDB is used for data storage and analysis in Project 4, which aligns with the concept of an analytical database. The concluding sentence summarizes that both projects share the use of DuckDB as a database technology. It covers all the facts from the expected answer without any omissions or hallucinations.",Gemini (gemini-2.5-flash / KEY_2)
+3,cross-project,Quelles sont les différences de sources de données entre le projet ELT (Projet 2) et le FMCG Pricing Monitor (Projet 4) ?,"Le projet ELT utilise un fichier statique Excel (Online Retail II) tandis que le FMCG Pricing Monitor extrait ses données de 4 APIs externes (BCE, INSEE, Yahoo Finance, Open Food Facts).","Pour le projet ""ELT Retail Analytics"" (Projet 2), les données proviennent principalement de fichiers `Excel` non structurés, qui contiennent des informations sur les ventes e-commerce.
+
+En revanche, le projet ""FMCG Pricing Pressure Monitor"" (Projet 4) s'appuie sur l'extraction de données via des APIs officielles. Il utilise les APIs de la Banque Centrale Européenne (BCE), de l'INSEE, de Yahoo Finance et d'Open Food Facts pour collecter des données macro-économiques et des informations sur les marchés à terme et les prix à la consommation.",1,"Evaluation LLM failed: 429 You exceeded your current quota, please check your plan and billing details. For more information on this error, head to: https://ai.google.dev/gemini-api/docs/rate-limits. To monitor your current usage, head to: https://ai.dev/rate-limit. 
+* Quota exceeded for metric: generativelanguage.googleapis.com/generate_content_free_tier_requests, limit: 20, model: gemini-2.5-flash
+Please retry in 2.179581657s. [links {
+  description: ""Learn more about Gemini API quotas""
+  url: ""https://ai.google.dev/gemini-api/docs/rate-limits""
+}
+, violations {
+  quota_metric: ""generativelanguage.googleapis.com/generate_content_free_tier_requests""
+  quota_id: ""GenerateRequestsPerDayPerProjectPerModel-FreeTier""
+  quota_dimensions {
+    key: ""model""
+    value: ""gemini-2.5-flash""
+  }
+  quota_dimensions {
+    key: ""location""
+    value: ""global""
+  }
+  quota_value: 20
+}
+, retry_delay {
+  seconds: 2
+}
+]",Gemini (gemini-2.5-flash / KEY_2)
+4,personal,Rafael a-t-il un animal de compagnie ? Donne des détails.,"Oui, il possède une femelle Doberman née le 11 janvier 2025.",All APIs are temporarily unavailable. Please try again later. / Toutes les APIs sont temporairement indisponibles. Veuillez réessayer plus tard.,1,"Evaluation LLM failed: 429 You exceeded your current quota, please check your plan and billing details. For more information on this error, head to: https://ai.google.dev/gemini-api/docs/rate-limits. To monitor your current usage, head to: https://ai.dev/rate-limit. 
+* Quota exceeded for metric: generativelanguage.googleapis.com/generate_content_free_tier_requests, limit: 5, model: gemini-2.5-flash
+Please retry in 58.961050494s. [links {
+  description: ""Learn more about Gemini API quotas""
+  url: ""https://ai.google.dev/gemini-api/docs/rate-limits""
+}
+, violations {
+  quota_metric: ""generativelanguage.googleapis.com/generate_content_free_tier_requests""
+  quota_id: ""GenerateRequestsPerMinutePerProjectPerModel-FreeTier""
+  quota_dimensions {
+    key: ""model""
+    value: ""gemini-2.5-flash""
+  }
+  quota_dimensions {
+    key: ""location""
+    value: ""global""
+  }
+  quota_value: 5
+}
+, retry_delay {
+  seconds: 58
+}
+]",none
+5,metrics,"Dans le projet Supply Chain, quelles sont les trois questions opérationnelles auxquelles le dashboard Power BI répond ?",1. Quel est le niveau de service (On-Time %) ? 2. Où se concentrent les retards ? 3. Quel est l'impact business ?,All APIs are temporarily unavailable. Please try again later. / Toutes les APIs sont temporairement indisponibles. Veuillez réessayer plus tard.,1,"Evaluation LLM failed: 429 You exceeded your current quota, please check your plan and billing details. For more information on this error, head to: https://ai.google.dev/gemini-api/docs/rate-limits. To monitor your current usage, head to: https://ai.dev/rate-limit. 
+* Quota exceeded for metric: generativelanguage.googleapis.com/generate_content_free_tier_requests, limit: 5, model: gemini-2.5-flash
+Please retry in 55.798228124s. [links {
+  description: ""Learn more about Gemini API quotas""
+  url: ""https://ai.google.dev/gemini-api/docs/rate-limits""
+}
+, violations {
+  quota_metric: ""generativelanguage.googleapis.com/generate_content_free_tier_requests""
+  quota_id: ""GenerateRequestsPerMinutePerProjectPerModel-FreeTier""
+  quota_dimensions {
+    key: ""model""
+    value: ""gemini-2.5-flash""
+  }
+  quota_dimensions {
+    key: ""location""
+    value: ""global""
+  }
+  quota_value: 5
+}
+, retry_delay {
+  seconds: 55
+}
+]",none
+6,personal,Quel est le sujet exact du travail de fin d'études (TCC) de son MBA à l'USP ?,"Son TCC porte sur l'Architecture Multi-Agents dans un pipeline ETL (extraction, nettoyage, analyse) appliqué à des données e-commerce, ou via Web Scraping.",All APIs are temporarily unavailable. Please try again later. / Toutes les APIs sont temporairement indisponibles. Veuillez réessayer plus tard.,1,"Evaluation LLM failed: 429 You exceeded your current quota, please check your plan and billing details. For more information on this error, head to: https://ai.google.dev/gemini-api/docs/rate-limits. To monitor your current usage, head to: https://ai.dev/rate-limit. 
+* Quota exceeded for metric: generativelanguage.googleapis.com/generate_content_free_tier_requests, limit: 20, model: gemini-2.5-flash
+Please retry in 52.392652494s. [links {
+  description: ""Learn more about Gemini API quotas""
+  url: ""https://ai.google.dev/gemini-api/docs/rate-limits""
+}
+, violations {
+  quota_metric: ""generativelanguage.googleapis.com/generate_content_free_tier_requests""
+  quota_id: ""GenerateRequestsPerDayPerProjectPerModel-FreeTier""
+  quota_dimensions {
+    key: ""model""
+    value: ""gemini-2.5-flash""
+  }
+  quota_dimensions {
+    key: ""location""
+    value: ""global""
+  }
+  quota_value: 20
+}
+, retry_delay {
+  seconds: 52
+}
+]",none
+7,technical,Quelles sont les technologies utilisées dans le pipeline d'ingestion de savoir du projet Midolli-AI (Projet 6) ?,"Il utilise Python (FastAPI), ChromaDB, Gemini pour les embeddings (text-embedding-004/001), et PyMuPDF pour extraire le texte du CV PDF.",All APIs are temporarily unavailable. Please try again later. / Toutes les APIs sont temporairement indisponibles. Veuillez réessayer plus tard.,1,"Evaluation LLM failed: 429 You exceeded your current quota, please check your plan and billing details. For more information on this error, head to: https://ai.google.dev/gemini-api/docs/rate-limits. To monitor your current usage, head to: https://ai.dev/rate-limit. 
+* Quota exceeded for metric: generativelanguage.googleapis.com/generate_content_free_tier_requests, limit: 20, model: gemini-2.5-flash
+Please retry in 49.06759885s. [links {
+  description: ""Learn more about Gemini API quotas""
+  url: ""https://ai.google.dev/gemini-api/docs/rate-limits""
+}
+, violations {
+  quota_metric: ""generativelanguage.googleapis.com/generate_content_free_tier_requests""
+  quota_id: ""GenerateRequestsPerDayPerProjectPerModel-FreeTier""
+  quota_dimensions {
+    key: ""model""
+    value: ""gemini-2.5-flash""
+  }
+  quota_dimensions {
+    key: ""location""
+    value: ""global""
+  }
+  quota_value: 20
+}
+, retry_delay {
+  seconds: 49
+}
+]",none
+8,personal,Quels sont les loisirs et plats préférés de Rafael ?,"Il s'intéresse à la cuisine (recettes japonaises, soupe à l'oignon, tiramisu, zuppa anglaise), aux jeux vidéo (modification de jeux PS2), et à la mécanique automobile simple.",All APIs are temporarily unavailable. Please try again later. / Toutes les APIs sont temporairement indisponibles. Veuillez réessayer plus tard.,1,"Evaluation LLM failed: 429 You exceeded your current quota, please check your plan and billing details. For more information on this error, head to: https://ai.google.dev/gemini-api/docs/rate-limits. To monitor your current usage, head to: https://ai.dev/rate-limit. 
+* Quota exceeded for metric: generativelanguage.googleapis.com/generate_content_free_tier_requests, limit: 20, model: gemini-2.5-flash
+Please retry in 45.793229933s. [links {
+  description: ""Learn more about Gemini API quotas""
+  url: ""https://ai.google.dev/gemini-api/docs/rate-limits""
+}
+, violations {
+  quota_metric: ""generativelanguage.googleapis.com/generate_content_free_tier_requests""
+  quota_id: ""GenerateRequestsPerDayPerProjectPerModel-FreeTier""
+  quota_dimensions {
+    key: ""model""
+    value: ""gemini-2.5-flash""
+  }
+  quota_dimensions {
+    key: ""location""
+    value: ""global""
+  }
+  quota_value: 20
+}
+, retry_delay {
+  seconds: 45
+}
+]",none

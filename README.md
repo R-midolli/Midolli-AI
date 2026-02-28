@@ -47,6 +47,19 @@ flowchart TD
     style G fill:#ea4335,color:#fff,stroke:#000,stroke-width:1px
 ```
 
+### 🧪 Qualidade & Testes (QA RAG)
+
+Para garantir que o `Super RAG` não gere alucinações (ex: inventando métricas de outros projetos), o repositório conta com um pipeline de avaliação **LLM-as-a-Judge**.
+
+1. **Dataset Ground Truth:** As perguntas cruzadas e as respostas corretas e rigorosas estão tabuladas em `tests/qa_dataset.csv`.
+2. **LLM Evaluator:** O script `scripts/evaluate_rag.py` dispara as perguntas contra o backend do RAG e utiliza o modelo local como um juiz imparcial para conferir se a resposta gerada é factualmente idêntica à esperada (Score 1 a 5).
+3. **Relatórios:** Os resultados da acurácia e delírios caem no relatório final em `reports/rag_evaluation_results.csv`.
+
+**Para rodar a bateria de testes de acurácia:**
+```bash
+uv run python scripts/evaluate_rag.py
+```
+
 ### Quick Setup
 
 ```bash

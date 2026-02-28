@@ -1,0 +1,9 @@
+question_id,category,question,expected_answer
+1,metrics,"Quel est l'AUC-ROC du projet de Churn et quel modèle a été utilisé ?","L'AUC-ROC est de 0.84 et le modèle utilisé est XGBoost avec interprétabilité SHAP."
+2,cross-project,"Compare les technologies de base de données utilisées entre le projet Retail BA (Projet 1) et le projet FMCG Pricing Monitor (Projet 4).","Les deux projets utilisent DuckDB comme base de données analytique."
+3,cross-project,"Quelles sont les différences de sources de données entre le projet ELT (Projet 2) et le FMCG Pricing Monitor (Projet 4) ?","Le projet ELT utilise un fichier statique Excel (Online Retail II) tandis que le FMCG Pricing Monitor extrait ses données de 4 APIs externes (BCE, INSEE, Yahoo Finance, Open Food Facts)."
+4,personal,"Rafael a-t-il un animal de compagnie ? Donne des détails.","Oui, il possède une femelle Doberman née le 11 janvier 2025."
+5,metrics,"Dans le projet Supply Chain, quelles sont les trois questions opérationnelles auxquelles le dashboard Power BI répond ?","1. Quel est le niveau de service (On-Time %) ? 2. Où se concentrent les retards ? 3. Quel est l'impact business ?"
+6,personal,"Quel est le sujet exact du travail de fin d'études (TCC) de son MBA à l'USP ?","Son TCC porte sur l'Architecture Multi-Agents dans un pipeline ETL (extraction, nettoyage, analyse) appliqué à des données e-commerce, ou via Web Scraping."
+7,technical,"Quelles sont les technologies utilisées dans le pipeline d'ingestion de savoir du projet Midolli-AI (Projet 6) ?","Il utilise Python (FastAPI), ChromaDB, Gemini pour les embeddings (text-embedding-004/001), et PyMuPDF pour extraire le texte du CV PDF."
+8,personal,"Quels sont les loisirs et plats préférés de Rafael ?","Il s'intéresse à la cuisine (recettes japonaises, soupe à l'oignon, tiramisu, zuppa anglaise), aux jeux vidéo (modification de jeux PS2), et à la mécanique automobile simple."
