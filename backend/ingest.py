@@ -72,7 +72,8 @@ def read_knowledge_files() -> list[dict]:
         "ELT_retail_analytics",
         "supply_chain_analytics",
         "fmcg_pricing_macro_monitor",
-        "Customer Churn Prediction & Reactivation Propensity"
+        "Customer Churn Prediction & Reactivation Propensity",
+        "Midolli-AI",
     ]
     
     print("\n[Step 1.5] Reading specific workspace project READMEs...")
