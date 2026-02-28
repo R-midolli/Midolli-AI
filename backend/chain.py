@@ -15,13 +15,17 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # ---------------------------------------------------------------------------
-# Configuration
+# Configuration (2026 Stack)
 # ---------------------------------------------------------------------------
 VECTORSTORE_DIR = Path(__file__).parent / "data" / "vectorstore"
 COLLECTION_NAME = "midolli_knowledge"
 EMBEDDING_MODEL = "models/gemini-embedding-001"
-GEMINI_MODEL = "gemini-1.5-flash"
-NVIDIA_MODEL = "meta/llama-3.1-70b-instruct"
+
+# LLM Models
+GEMINI_PRIMARY = "gemini-3.0-flash"
+GEMINI_SECONDARY = "gemini-2.5-flash" 
+NVIDIA_MODEL = "qwen3.5-397b-a17b" # NVIDIA Build (OpenAI compatible)
+
 TOP_K = 5
 
 SYSTEM_PROMPT = """You are Midolli-AI, the intelligent assistant for Rafael Midolli's data portfolio.
@@ -107,11 +111,11 @@ def _build_prompt(query: str, context_chunks: list[dict], history: list) -> list
     return messages
 
 
-def _try_gemini(query: str, context_chunks: list[dict], history: list, api_key: str, key_name: str) -> dict | None:
-    """Try to get an answer from Gemini."""
+def _try_gemini(query: str, context_chunks: list[dict], history: list, api_key: str, key_name: str, model_name: str) -> dict | None:
+    """Try to get an answer from Gemini (Primary or Secondary)."""
     try:
         genai.configure(api_key=api_key)
-        model = genai.GenerativeModel(GEMINI_MODEL)
+        model = genai.GenerativeModel(model_name)
 
         messages = _build_prompt(query, context_chunks, history)
         response = model.generate_content(messages)
@@ -121,15 +125,15 @@ def _try_gemini(query: str, context_chunks: list[dict], history: list, api_key: 
             return {
                 "reply": response.text,
                 "sources": sources,
-                "api_used": f"Gemini ({key_name})",
+                "api_used": f"Gemini ({model_name} / {key_name})",
             }
     except Exception as e:
-        print(f"[WARNING] Gemini {key_name} failed: {e}")
+        print(f"[WARNING] Gemini ({model_name} / {key_name}) failed: {e}")
     return None
 
 
 def _try_nvidia(query: str, context_chunks: list[dict], history: list) -> dict | None:
-    """Try to get an answer from NVIDIA LLaMA-3.1-70B."""
+    """Try to get an answer from NVIDIA Build (Qwen 3.5 MoE or fallback)."""
     try:
         nvidia_key = os.getenv("NVIDIA_API_KEY")
         if not nvidia_key:
@@ -167,11 +171,27 @@ def _try_nvidia(query: str, context_chunks: list[dict], history: list) -> dict |
             return {
                 "reply": reply,
                 "sources": sources,
-                "api_used": "NVIDIA LLaMA-3.1-70B",
+                "api_used": f"NVIDIA ({NVIDIA_MODEL})",
             }
     except Exception as e:
         print(f"[WARNING] NVIDIA failed: {e}")
     return None
+
+
+def _is_complex_query(query: str, history: list) -> bool:
+    """Heuristic to decide if the query requires a heavier reasoning model."""
+    if len(history) >= 4:
+        return True
+    if len(query) > 200:
+        return True
+    
+    complex_keywords = ["analise", "resuma", "compare", "diferença", "explique em detalhes", "summarize", "analyze", "compare", "difference"]
+    query_lower = query.lower()
+    for kw in complex_keywords:
+        if kw in query_lower:
+            return True
+            
+    return False
 
 
 def answer(query: str, history: list | None = None) -> dict:
@@ -197,24 +217,44 @@ def answer(query: str, history: list | None = None) -> dict:
                 "api_used": "none",
             }
 
-        # Step 2: Try Gemini KEY_1
         key1 = os.getenv("GEMINI_API_KEY_1")
-        if key1:
-            result = _try_gemini(query, context_chunks, history, key1, "KEY_1")
-            if result:
-                return result
-
-        # Step 3: Try Gemini KEY_2
         key2 = os.getenv("GEMINI_API_KEY_2")
-        if key2:
-            result = _try_gemini(query, context_chunks, history, key2, "KEY_2")
+
+        # Step 2: Route via LLMRouter heuristic
+        history_safe = history or []
+        is_complex = _is_complex_query(query, history_safe)
+
+        if is_complex:
+            # Complex Route: NVIDIA -> Gemini 3 -> Gemini 2.5
+            result = _try_nvidia(query, context_chunks, history_safe)
             if result:
                 return result
-
-        # Step 4: Try NVIDIA fallback
-        result = _try_nvidia(query, context_chunks, history)
-        if result:
-            return result
+            
+            if key1:
+                result = _try_gemini(query, context_chunks, history_safe, key1, "KEY_1", GEMINI_PRIMARY)
+                if result:
+                    return result
+                
+            if key2:
+                result = _try_gemini(query, context_chunks, history_safe, key2, "KEY_2", GEMINI_SECONDARY)
+                if result:
+                    return result
+                
+        else:
+            # Fast Route: Gemini 3 -> Gemini 2.5 -> NVIDIA
+            if key1:
+                result = _try_gemini(query, context_chunks, history_safe, key1, "KEY_1", GEMINI_PRIMARY)
+                if result:
+                    return result
+                
+            if key2:
+                result = _try_gemini(query, context_chunks, history_safe, key2, "KEY_2", GEMINI_SECONDARY)
+                if result:
+                    return result
+                
+            result = _try_nvidia(query, context_chunks, history_safe)
+            if result:
+                return result
 
         # All APIs failed
         return {
@@ -230,3 +270,4 @@ def answer(query: str, history: list | None = None) -> dict:
             "sources": [],
             "api_used": "none",
         }
+

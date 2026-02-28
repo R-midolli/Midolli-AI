@@ -6,22 +6,42 @@
 
 An intelligent RAG chatbot embedded in [Rafael Midolli's data portfolio](https://r-midolli.github.io/portfolio_rafael_midolli/). It answers questions about his career, CV, projects and skills in **French or English**, powered by 3 APIs with automatic fallback to guarantee zero downtime.
 
-### Architecture
+### 🧠 LLM Stack & Arquitetura (Fev 2026)
 
-```
-User sends message in JS widget
-      ↓ POST /chat
-FastAPI backend (Render.com)
-      ↓ semantic search (top-5 chunks)
-ChromaDB — knowledge base (MD files + CV PDF)
-      ↓ relevant context + question
-Gemini 1.5 Flash [KEY_1] → response
-      ↓ fallback on quota / error
-Gemini 1.5 Flash [KEY_2] → response
-      ↓ final fallback
-NVIDIA LLaMA-3.1-70B
-      ↓
-JSON response → widget renders in FR or EN
+Este chatbot utiliza a arquitetura RAG (Retrieval-Augmented Generation) acoplada a um **LLMRouter Inteligente** que distribui dinamicamente o tráfego entre diferentes LLMs de ponta da geração 2026, garantindo o melhor custo-benefício, velocidade e capacidade de raciocínio.
+
+#### 1. Rota de Alta Velocidade (Padrão - 80% das queries)
+As perguntas do dia a dia sobre o perfil são processadas pela versão mais recente e rápida da Google:
+- **Primário:** `gemini-3.0-flash` (via Google AI Studio Key #1)
+- **Secundário (Load Balance/Fallback):** `gemini-2.5-flash` (via Google AI Studio Key #2)
+
+#### 2. Rota Complexa (Raciocínio Pesado - 20% das queries)
+Perguntas analíticas longas, comparações ou históricos densos (>4 interações) sofrem bypass heurístico para um modelo gigantesco Mixture of Experts (MoE):
+- **Modelo:** `qwen3.5-397b-a17b`
+- **Provedor:** NVIDIA Build Ecosystem (OpenAI API Compatible)
+
+#### 📊 Fluxograma do LLMRouter
+
+```mermaid
+flowchart TD
+    A[Usuário] --> B[Query]
+    B --> C[RAG Pipeline\nEmbeddings + Retrieval + Reranking]
+    C --> D[Contexto Enriquecido]
+    
+    D --> E[LLM Router Heurístico]
+    
+    E -->|Rápida / Curta| F[Gemini 3.0 Flash\nGoogle AI Studio #1]
+    E -->|Fallback Ativo| G[Gemini 2.5 Flash\nGoogle AI Studio #2]
+    E -->|Complexa / Analítica / Histórico Longo| H[Qwen 3.5-397B MoE\nNVIDIA Build]
+    
+    F --> I[Resposta Final em FR/EN]
+    G --> I
+    H --> I
+
+    style E fill:#22c55e,color:#fff,stroke:#000,stroke-width:2px
+    style H fill:#76b900,color:#fff,stroke:#000,stroke-width:1px
+    style F fill:#4285f4,color:#fff,stroke:#000,stroke-width:1px
+    style G fill:#ea4335,color:#fff,stroke:#000,stroke-width:1px
 ```
 
 ### Quick Setup
