@@ -26,7 +26,7 @@ GEMINI_PRIMARY = "gemini-3.0-flash"
 GEMINI_SECONDARY = "gemini-2.5-flash" 
 NVIDIA_MODEL = "qwen3.5-397b-a17b" # NVIDIA Build (OpenAI compatible)
 
-TOP_K = 5
+TOP_K = 10
 
 SYSTEM_PROMPT = """You are Midolli-AI, the intelligent assistant for Rafael Midolli's data portfolio.
 

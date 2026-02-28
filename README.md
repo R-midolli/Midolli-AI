@@ -16,9 +16,12 @@ As perguntas do dia a dia sobre o perfil são processadas pela versão mais rece
 - **Secundário (Load Balance/Fallback):** `gemini-2.5-flash` (via Google AI Studio Key #2)
 
 #### 2. Rota Complexa (Raciocínio Pesado - 20% das queries)
-Perguntas analíticas longas, comparações ou históricos densos (>4 interações) sofrem bypass heurístico para um modelo gigantesco Mixture of Experts (MoE):
+Perguntas analíticas longas, comparações de métricas entre projetos ou históricos densos (>4 interações) sofrem bypass heurístico para um modelo gigantesco Mixture of Experts (MoE), alimentado por um **Coração RAG Hiper-Denso** (TOP_K=10 chunks).
 - **Modelo:** `qwen3.5-397b-a17b`
 - **Provedor:** NVIDIA Build Ecosystem (OpenAI API Compatible)
+
+#### 📂 Super RAG: Ingestão de Contexto Profundo
+Diferente de RAGs tradicionais (que se limitam a resumos superficiais), o `ingest.py` foi arquitetado para fazer "spidering" nos diretórios locais do Host. A Base Vetorial é gerada a partir da **leitura direta dos READMEs originais dos 5 projetos no Workspace** + o arquivo CV PDF original + metadados de preferências pessoais (hobbies, rotina, MBA). Isso garante que ferramentas cruzadas e métricas (`"No projeto 2 o gráfico x retornou y%, mas no projeto 4..."`) sejam respondidas puramente com os dados injetados, eliminando alucinação.
 
 #### 📊 Fluxograma do LLMRouter
 

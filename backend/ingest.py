@@ -17,10 +17,14 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # ---------------------------------------------------------------------------
-# Configuration
+# Configuration (Super RAG 2026)
 # ---------------------------------------------------------------------------
 KNOWLEDGE_DIR = Path(__file__).parent / "knowledge"
-CV_PDF_PATH = Path(__file__).parent.parent / ".agent" / "sources" / "CV_Rafael_Midolli_2026.pdf"
+PROJECT_ROOT = Path(__file__).parent.parent
+AGENT_SOURCES_DIR = PROJECT_ROOT / ".agent" / "sources"
+WORKSPACE_DIR = PROJECT_ROOT.parent
+
+CV_PDF_PATH = AGENT_SOURCES_DIR / "CV_Rafael_Midolli_2026.pdf"
 VECTORSTORE_DIR = Path(__file__).parent / "data" / "vectorstore"
 COLLECTION_NAME = "midolli_knowledge"
 CHUNK_SIZE = 700
@@ -43,19 +47,44 @@ def extract_pdf_text(pdf_path: Path) -> str:
 
 
 def read_knowledge_files() -> list[dict]:
-    """Read all .md files from the knowledge directory."""
+    """Read .md from knowledge/, personal profile from .agent/, and workspace READMEs."""
     documents = []
-    if not KNOWLEDGE_DIR.exists():
-        print(f"[ERROR] Knowledge directory not found: {KNOWLEDGE_DIR}")
-        return documents
+    
+    # 1. Base knowledge files
+    if KNOWLEDGE_DIR.exists():
+        for md_file in sorted(KNOWLEDGE_DIR.glob("*.md")):
+            content = md_file.read_text(encoding="utf-8")
+            documents.append({"source": md_file.name, "content": content})
+            print(f"  [OK] Read {md_file.name} ({len(content)} chars)")
+            
+    # 2. Personal profiles from .agent/sources
+    personal_files = ["profil_complet_utilisateur.md", "SOURCES_INDEX.md", "linkedin_profile.md"]
+    for pf in personal_files:
+        pf_path = AGENT_SOURCES_DIR / pf
+        if pf_path.exists():
+            content = pf_path.read_text(encoding="utf-8")
+            documents.append({"source": pf, "content": content})
+            print(f"  [OK] Read personal profile {pf} ({len(content)} chars)")
 
-    for md_file in sorted(KNOWLEDGE_DIR.glob("*.md")):
-        content = md_file.read_text(encoding="utf-8")
-        documents.append({
-            "source": md_file.name,
-            "content": content,
-        })
-        print(f"  [OK] Read {md_file.name} ({len(content)} chars)")
+    # 3. Workspace Projects READMEs
+    projects = [
+        "retail-ba-diagnostic",
+        "ELT_retail_analytics",
+        "supply_chain_analytics",
+        "fmcg_pricing_macro_monitor",
+        "Customer Churn Prediction & Reactivation Propensity"
+    ]
+    
+    print("\n[Step 1.5] Reading specific workspace project READMEs...")
+    for project_name in projects:
+        readme_path = WORKSPACE_DIR / project_name / "README.md"
+        if readme_path.exists():
+            content = readme_path.read_text(encoding="utf-8")
+            source_name = f"{project_name}/README.md"
+            documents.append({"source": source_name, "content": content})
+            print(f"  [OK] Read {source_name} ({len(content)} chars)")
+        else:
+            print(f"  [WARNING] Could not find README for {project_name}")
 
     return documents
 
