@@ -22,9 +22,9 @@ COLLECTION_NAME = "midolli_knowledge"
 EMBEDDING_MODEL = "models/gemini-embedding-001"
 
 # LLM Models
-GEMINI_PRIMARY = "gemini-3.0-flash"
+GEMINI_PRIMARY = "gemini-3-flash-preview"
 GEMINI_SECONDARY = "gemini-2.5-flash" 
-NVIDIA_MODEL = "qwen3.5-397b-a17b" # NVIDIA Build (OpenAI compatible)
+NVIDIA_MODEL = "meta/llama-3.1-70b-instruct" # NVIDIA Build (OpenAI compatible)
 
 TOP_K = 10
 
