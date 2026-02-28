@@ -224,41 +224,60 @@ def answer(query: str, history: list | None = None) -> dict:
         history_safe = history or []
         is_complex = _is_complex_query(query, history_safe)
 
+        errors = []
         if is_complex:
             # Complex Route: NVIDIA -> Gemini 3 -> Gemini 2.5
-            result = _try_nvidia(query, context_chunks, history_safe)
-            if result:
-                return result
+            try:
+                result = _try_nvidia(query, context_chunks, history_safe)
+                if result:
+                    return result
+            except Exception as e:
+                errors.append(f"NV:{e}")
             
             if key1:
-                result = _try_gemini(query, context_chunks, history_safe, key1, "KEY_1", GEMINI_PRIMARY)
-                if result:
-                    return result
+                try:
+                    result = _try_gemini(query, context_chunks, history_safe, key1, "KEY_1", GEMINI_PRIMARY)
+                    if result:
+                        return result
+                except Exception as e:
+                    errors.append(f"G1:{e}")
                 
             if key2:
-                result = _try_gemini(query, context_chunks, history_safe, key2, "KEY_2", GEMINI_SECONDARY)
-                if result:
-                    return result
+                try:
+                    result = _try_gemini(query, context_chunks, history_safe, key2, "KEY_2", GEMINI_SECONDARY)
+                    if result:
+                        return result
+                except Exception as e:
+                    errors.append(f"G2:{e}")
                 
         else:
             # Fast Route: Gemini 3 -> Gemini 2.5 -> NVIDIA
             if key1:
-                result = _try_gemini(query, context_chunks, history_safe, key1, "KEY_1", GEMINI_PRIMARY)
-                if result:
-                    return result
+                try:
+                    result = _try_gemini(query, context_chunks, history_safe, key1, "KEY_1", GEMINI_PRIMARY)
+                    if result:
+                        return result
+                except Exception as e:
+                    errors.append(f"G1:{e}")
                 
             if key2:
-                result = _try_gemini(query, context_chunks, history_safe, key2, "KEY_2", GEMINI_SECONDARY)
+                try:
+                    result = _try_gemini(query, context_chunks, history_safe, key2, "KEY_2", GEMINI_SECONDARY)
+                    if result:
+                        return result
+                except Exception as e:
+                    errors.append(f"G2:{e}")
+                
+            try:
+                result = _try_nvidia(query, context_chunks, history_safe)
                 if result:
                     return result
-                
-            result = _try_nvidia(query, context_chunks, history_safe)
-            if result:
-                return result
+            except Exception as e:
+                errors.append(f"NV:{e}")
 
         # All APIs failed
         return {
-            "reply": "All APIs are temporarily unavailable. Please try again later. / Toutes les APIs sont temporairement indisponibles. Veuillez réessayer plus tard.",
+            "reply": f"All APIs are temporarily unavailable. Please try again later. / Toutes les APIs sont temporairement indisponibles. Veuillez réessayer plus tard. [DEBUG: {errors}]",
             "sources": [],
             "api_used": "none",
         }
