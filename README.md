@@ -6,38 +6,38 @@
 
 An intelligent RAG chatbot embedded in [Rafael Midolli's data portfolio](https://r-midolli.github.io/portfolio_rafael_midolli/). It answers questions about his career, CV, projects and skills in **French or English**, powered by 3 APIs with automatic fallback to guarantee zero downtime.
 
-### 🧠 LLM Stack & Arquitetura (Fev 2026)
+### 🧠 LLM Stack & Architecture (Feb 2026)
 
-Este chatbot utiliza a arquitetura RAG (Retrieval-Augmented Generation) acoplada a um **LLMRouter Inteligente** que distribui dinamicamente o tráfego entre diferentes LLMs de ponta da geração 2026, garantindo o melhor custo-benefício, velocidade e capacidade de raciocínio.
+This chatbot utilizes a RAG (Retrieval-Augmented Generation) architecture coupled with an **Intelligent LLMRouter** that dynamically distributes traffic across cutting-edge 2026 LLMs, ensuring the best cost-to-performance ratio, speed, and reasoning capabilities.
 
-#### 1. Rota de Alta Velocidade (Padrão - 80% das queries)
-As perguntas do dia a dia sobre o perfil são processadas pela versão mais recente e rápida da Google:
-- **Primário:** `gemini-3.0-flash` (via Google AI Studio Key #1)
-- **Secundário (Load Balance/Fallback):** `gemini-2.5-flash` (via Google AI Studio Key #2)
+#### 1. High-Speed Route (Default - 80% of queries)
+Everyday profile questions are processed by Google's latest and fastest model:
+- **Primary:** `gemini-3.0-flash` (via Google AI Studio Key #1)
+- **Secondary (Load Balance/Fallback):** `gemini-2.5-flash` (via Google AI Studio Key #2)
 
-#### 2. Rota Complexa (Raciocínio Pesado - 20% das queries)
-Perguntas analíticas longas, comparações de métricas entre projetos ou históricos densos (>4 interações) sofrem bypass heurístico para um modelo gigantesco Mixture of Experts (MoE), alimentado por um **Coração RAG Hiper-Denso** (TOP_K=10 chunks).
-- **Modelo:** `qwen3.5-397b-a17b`
-- **Provedor:** NVIDIA Build Ecosystem (OpenAI API Compatible)
+#### 2. Complex Route (Heavy Reasoning - 20% of queries)
+Long analytical questions, cross-project metric comparisons, or dense history (>4 interactions) trigger a heuristic bypass to a massive Mixture of Experts (MoE) model powered by a **Hyper-Dense RAG Core** (TOP_K=10 chunks).
+- **Model:** `qwen3.5-397b-a17b`
+- **Provider:** NVIDIA Build Ecosystem (OpenAI API Compatible)
 
-#### 📂 Super RAG: Ingestão de Contexto Profundo
-Diferente de RAGs tradicionais (que se limitam a resumos superficiais), o `ingest.py` foi arquitetado para fazer "spidering" nos diretórios locais do Host. A Base Vetorial é gerada a partir da **leitura direta dos READMEs originais dos 5 projetos no Workspace** + o arquivo CV PDF original + metadados de preferências pessoais (hobbies, rotina, MBA). Isso garante que ferramentas cruzadas e métricas (`"No projeto 2 o gráfico x retornou y%, mas no projeto 4..."`) sejam respondidas puramente com os dados injetados, eliminando alucinação.
+#### 📂 Super RAG: Deep Context Ingestion
+Unlike traditional RAGs (which rely on superficial summaries), `ingest.py` acts as a "spider" across local Host directories. The Vector Base is built by **directly reading the original READMEs of all 5 Workspace projects** + the original PDF CV + personal preference metadata (hobbies, routine, MBA). This ensures cross-referencing capabilities (`"In project 2 chart x returned y%, but in project 4..."`) are answered purely with injected data, eliminating hallucination.
 
-#### 📊 Fluxograma do LLMRouter
+#### 📊 LLMRouter Flowchart
 
 ```mermaid
 flowchart TD
-    A[Usuário] --> B[Query]
+    A[User] --> B[Query]
     B --> C[RAG Pipeline\nEmbeddings + Retrieval + Reranking]
-    C --> D[Contexto Enriquecido]
+    C --> D[Enriched Context]
     
-    D --> E[LLM Router Heurístico]
+    D --> E[Heuristic LLM Router]
     
-    E -->|Rápida / Curta| F[Gemini 3.0 Flash\nGoogle AI Studio #1]
-    E -->|Fallback Ativo| G[Gemini 2.5 Flash\nGoogle AI Studio #2]
-    E -->|Complexa / Analítica / Histórico Longo| H[Qwen 3.5-397B MoE\nNVIDIA Build]
+    E -->|Fast / Short| F[Gemini 3.0 Flash\nGoogle AI Studio #1]
+    E -->|Active Fallback| G[Gemini 2.5 Flash\nGoogle AI Studio #2]
+    E -->|Complex / Analytical / Long History| H[Qwen 3.5-397B MoE\nNVIDIA Build]
     
-    F --> I[Resposta Final em FR/EN]
+    F --> I[Final Response in FR/EN]
     G --> I
     H --> I
 
@@ -47,15 +47,15 @@ flowchart TD
     style G fill:#ea4335,color:#fff,stroke:#000,stroke-width:1px
 ```
 
-### 🧪 Qualidade & Testes (QA RAG)
+### 🧪 Quality & Tests (RAG QA)
 
-Para garantir que o `Super RAG` não gere alucinações (ex: inventando métricas de outros projetos), o repositório conta com um pipeline de avaliação **LLM-as-a-Judge**.
+To guarantee the `Super RAG` does not experience hallucinations (e.g. inventing metrics for other projects), the repository includes an **LLM-as-a-Judge** evaluation pipeline.
 
-1. **Dataset Ground Truth:** As perguntas cruzadas e as respostas corretas e rigorosas estão tabuladas em `tests/qa_dataset.csv`.
-2. **LLM Evaluator:** O script `scripts/evaluate_rag.py` dispara as perguntas contra o backend do RAG e utiliza o modelo local como um juiz imparcial para conferir se a resposta gerada é factualmente idêntica à esperada (Score 1 a 5).
-3. **Relatórios:** Os resultados da acurácia e delírios caem no relatório final em `reports/rag_evaluation_results.csv`.
+1. **Ground Truth Dataset:** Cross-project questions and rigorously correct expected answers are tabulated in `tests/qa_dataset.csv`.
+2. **LLM Evaluator:** The `scripts/evaluate_rag.py` script queries the RAG backend and leverages a local model as an impartial judge to verify if the generated answer is factually identical to the expected one (Score 1 to 5).
+3. **Reports:** Accuracy scores and potential hallucinations are summarized in the final report at `reports/rag_evaluation_results.csv`.
 
-**Para rodar a bateria de testes de acurácia:**
+**To run the accuracy test suite:**
 ```bash
 uv run python scripts/evaluate_rag.py
 ```
@@ -125,24 +125,29 @@ Add before `</body>` in your portfolio's `index.html`:
 
 Un chatbot RAG intelligent intégré au [portfolio data de Rafael Midolli](https://r-midolli.github.io/portfolio_rafael_midolli/). Il répond aux questions sur son parcours, CV, projets et compétences en **français ou anglais**, avec 3 APIs en fallback automatique pour garantir zéro interruption.
 
-### Stack Technique
+### Stack Technique Principale
 
-- **Backend** : FastAPI, ChromaDB, pymupdf
-- **LLMs** : Gemini 1.5 Flash (×2 clés), NVIDIA LLaMA-3.1-70B (fallback)
-- **Embedding** : Gemini gemini-embedding-001 (3072 dimensions)
+- **Backend** : Python 3.11, FastAPI, ChromaDB, pymupdf
 - **Frontend** : Vanilla JS (IIFE), CSS isolé (`.mai-` prefix)
 - **Déploiement** : Render.com (backend), GitHub Pages (widget)
 
-### Fonctionnalités
+### 🧠 LLM Stack & Architecture (Fév 2026)
+
+Ce chatbot utilise une architecture RAG couplée à un **LLMRouter intelligent** qui distribue le trafic :
+- **Route Rapide (80%)** : `gemini-3.0-flash` (clé #1) avec fallback sur `gemini-2.5-flash` (clé #2).
+- **Route Complexe (20%)** : `qwen3.5-397b-a17b` (NVIDIA Build) déclenché heuristiquement pour les questions analytiques ou les historiques longs (TOP_K=10 chunks).
+
+### 📂 Super RAG & Qualité (QA)
+L'ingestion des données (`ingest.py`) aspire directement les READMEs originaux des 5 projets locaux du workspace + le CV PDF + les profils personnels pour éviter les hallucinations.
+Le repo inclut également un pipeline automatisé **LLM-as-a-Judge** (`evaluate_rag.py`) testant l'exactitude factuelle en croisant les projets (Score 1-5).
+
+### Fonctionnalités Clés
 
 - ✅ Réponses FR/EN avec détection automatique de langue
 - ✅ Thème dark/light synchronisé avec le portfolio
-- ✅ Toggle FR/EN synchronisé en temps réel
-- ✅ 3-API fallback : Gemini KEY_1 → KEY_2 → NVIDIA
-- ✅ Base de connaissances : 13 fichiers MD + CV PDF
-- ✅ Zero invention : le bot ne répond que depuis le contexte vérifié
-- ✅ Mobile responsive (375px+)
-- ✅ Logo SVG inline (M + AI, gradient violet)
+- ✅ 3-API fallback : Google AI #1 → Google AI #2 → NVIDIA
+- ✅ Base de connaissances : READMEs de projets originaux + CV PDF + Profils
+- ✅ Mobile responsive (375px+) et SVG logo au format standard
 
 ---
 
