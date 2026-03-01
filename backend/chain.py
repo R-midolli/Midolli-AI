@@ -276,9 +276,9 @@ def _try_nvidia(
     api_key_env: str,
     model_name: str,
     label: str,
-    max_retries: int = 3,
+    max_retries: int = 1,
 ) -> dict | None:
-    """Try to get an answer from NVIDIA Build with exponential backoff retry."""
+    """Try NVIDIA Build API. Fast-fail on timeout (cold start), only retry on 429."""
     api_key = os.getenv(api_key_env)
     if not api_key:
         raise Exception(f"{api_key_env} not found in environment")
@@ -286,7 +286,7 @@ def _try_nvidia(
     client = OpenAI(
         base_url="https://integrate.api.nvidia.com/v1",
         api_key=api_key,
-        timeout=30.0,
+        timeout=12.0,  # 12s hard cap — cold models skip fast
     )
 
     context_text = "\n\n---\n\n".join(
@@ -315,7 +315,7 @@ def _try_nvidia(
             )
 
             elapsed = time.time() - t0
-            print(f"[PERF] {label} ({model_name}) responded in {elapsed:.2f}s (attempt {attempt + 1})", flush=True)
+            print(f"[PERF] {label} ({model_name}) responded in {elapsed:.2f}s", flush=True)
 
             if response and response.choices and response.choices[0].message.content:
                 reply = response.choices[0].message.content
@@ -330,16 +330,17 @@ def _try_nvidia(
         except Exception as e:
             last_error = e
             err_str = str(e).lower()
-            if "429" in str(e) or "rate limit" in err_str or "timeout" in err_str:
+            # Only retry on rate limit (429). Timeout = cold start, skip immediately.
+            if "429" in str(e) or "rate limit" in err_str:
                 wait = (2 ** attempt) + random.random()
-                print(f"[RETRY] {label} attempt {attempt + 1}/{max_retries} — waiting {wait:.1f}s — {e}", flush=True)
+                print(f"[RETRY] {label} attempt {attempt + 1}/{max_retries} — 429 rate limit — waiting {wait:.1f}s", flush=True)
                 time.sleep(wait)
                 continue
             else:
-                print(f"[WARNING] {label} failed (non-retryable): {e}", flush=True)
+                print(f"[SKIP] {label} failed (timeout/error, no retry): {e}", flush=True)
                 break
 
-    raise Exception(f"{label} failed after {max_retries} attempts: {last_error}")
+    raise Exception(f"{label} failed: {last_error}")
 
 
 # ---------------------------------------------------------------------------
