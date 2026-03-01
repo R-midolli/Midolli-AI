@@ -110,21 +110,37 @@ def chunk_text(text: str, source: str) -> list[dict]:
 
 
 def embed_batch(texts: list[str], max_retries: int = 3) -> list[list[float]]:
-    """Embed a batch of texts using Gemini with retry logic."""
-    for attempt in range(max_retries):
-        try:
-            result = genai.embed_content(
-                model=EMBEDDING_MODEL,
-                content=texts,
-            )
-            return result["embedding"]
-        except Exception as e:
-            if attempt < max_retries - 1:
-                wait = 2 ** (attempt + 1)
-                print(f"  [RETRY] embed_batch attempt {attempt + 1}/{max_retries} failed: {e}, waiting {wait}s...")
-                time.sleep(wait)
-            else:
-                raise Exception(f"embed_batch failed after {max_retries} attempts: {e}")
+    """Embed a batch of texts using Gemini with retry and key fallback logic."""
+    key1 = os.getenv("GEMINI_API_KEY_1")
+    key2 = os.getenv("GEMINI_API_KEY_2")
+    keys_to_try = [k for k in [key1, key2] if k]
+
+    if not keys_to_try:
+        raise Exception("No Gemini API key found for embeddings")
+
+    last_err = None
+    for api_key in keys_to_try:
+        genai.configure(api_key=api_key)
+        for attempt in range(max_retries):
+            try:
+                result = genai.embed_content(
+                    model=EMBEDDING_MODEL,
+                    content=texts,
+                )
+                return result["embedding"]
+            except Exception as e:
+                last_err = e
+                # Check for quota exceeded error (429) to immediately fallback to next key
+                if "429" in str(e) or "quota" in str(e).lower():
+                    print(f"  [WARNING] Key hit rate/quota limit: {e}. Trying next key if available...")
+                    break # Break out of retries for this key, move to next key
+                
+                if attempt < max_retries - 1:
+                    wait = 2 ** (attempt + 1)
+                    print(f"  [RETRY] embed_batch attempt {attempt + 1}/{max_retries} failed: {e}, waiting {wait}s...")
+                    time.sleep(wait)
+    
+    raise Exception(f"embed_batch failed on all keys. Last error: {last_err}")
 
 
 def run_ingest():
@@ -133,10 +149,10 @@ def run_ingest():
     print("Midolli-AI — Ingest Pipeline")
     print("=" * 60)
 
-    # Configure Gemini API
-    api_key = os.getenv("GEMINI_API_KEY_1")
+    # Configure Gemini API initially (not strictly needed as embed_batch loops keys, but good for validation)
+    api_key = os.getenv("GEMINI_API_KEY_1") or os.getenv("GEMINI_API_KEY_2")
     if not api_key:
-        print("[ERROR] GEMINI_API_KEY_1 not found in .env")
+        print("[ERROR] Neither GEMINI_API_KEY_1 nor GEMINI_API_KEY_2 found in .env")
         return
     genai.configure(api_key=api_key)
 
