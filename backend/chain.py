@@ -344,6 +344,32 @@ def _try_nvidia(
 
 
 # ---------------------------------------------------------------------------
+# Page Context Mapping
+# ---------------------------------------------------------------------------
+PAGE_CONTEXT_MAP = {
+    "project-retail": "Retail Analytics — Pareto & Segmentation Réseau",
+    "project-elt-retail": "ELT Retail Analytics — Pipeline & Star Schema",
+    "project-supply-chain": "Supply Chain Analytics — ETL & Dashboard",
+    "project-pricing": "FMCG Cost Pressure Monitor — API & Dashboard",
+    "project-midolli-ai": "Midolli-AI — RAG Chatbot & LLM Router",
+    "project-churn": "Customer Churn Prediction & Reactivation",
+}
+
+
+def _resolve_page_context(page_path: str) -> str:
+    """Map a page pathname to a project context hint for the LLM."""
+    if not page_path:
+        return ""
+    path_lower = page_path.lower().rstrip("/")
+    # Extract basename without extension
+    basename = path_lower.rsplit("/", 1)[-1].replace(".html", "")
+    for key, project_name in PAGE_CONTEXT_MAP.items():
+        if key in basename:
+            return project_name
+    return ""
+
+
+# ---------------------------------------------------------------------------
 # Query Classifier
 # ---------------------------------------------------------------------------
 def _query_category(query: str, history: list) -> str:
@@ -374,9 +400,9 @@ def _query_category(query: str, history: list) -> str:
 # ---------------------------------------------------------------------------
 # Main Answer Function
 # ---------------------------------------------------------------------------
-def answer(query: str, history: list | None = None) -> dict:
+def answer(query: str, history: list | None = None, page_context: str = "") -> dict:
     """
-    Answer a query using intelligent 3-tier LLM routing.
+    Answer a query using intelligent LLM routing with page context awareness.
     Returns: {"reply": str, "sources": list[str], "api_used": str}
     """
     if not query or not query.strip():
@@ -390,6 +416,11 @@ def answer(query: str, history: list | None = None) -> dict:
         t0_total = time.time()
         history_safe = history or []
         category = _query_category(query, history_safe)
+
+        # Resolve page context
+        project_hint = _resolve_page_context(page_context)
+        if project_hint:
+            print(f"[CONTEXT] Page: {page_context} → Project: {project_hint}", flush=True)
 
         key1 = os.getenv("GEMINI_API_KEY_1")
         key2 = os.getenv("GEMINI_API_KEY_2")
@@ -432,6 +463,19 @@ def answer(query: str, history: list | None = None) -> dict:
                 "sources": [],
                 "api_used": "none",
             }
+
+        # ── Inject page context as priority hint ──
+        if project_hint:
+            page_hint_chunk = {
+                "content": (
+                    f"[CONTEXTE DE PAGE] L'utilisateur navigue actuellement sur la page du projet : "
+                    f"**{project_hint}**. Si la question est vague ou utilise 'ce projet', "
+                    f"'this project', 'este projeto', elle concerne probablement ce projet. "
+                    f"Priorise les informations de ce projet dans ta réponse."
+                ),
+                "source": "page_context",
+            }
+            context_chunks = [page_hint_chunk] + context_chunks
 
         # ── SIMPLE (short factual Q) ──
         if category == "simple":

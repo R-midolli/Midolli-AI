@@ -43,6 +43,7 @@ class ChatRequest(BaseModel):
     message: str
     history: list = []
     lang: str = "fr"
+    page_context: str = ""
 
 
 class ChatResponse(BaseModel):
@@ -73,7 +74,10 @@ async def chat(request: ChatRequest):
     try:
         # Run blocking answer() in thread pool so it doesn't block the event loop
         result = await asyncio.to_thread(
-            answer, query=request.message, history=request.history
+            answer,
+            query=request.message,
+            history=request.history,
+            page_context=request.page_context,
         )
     except Exception as e:
         print(f"[ERROR] chat endpoint: {e}", flush=True)
