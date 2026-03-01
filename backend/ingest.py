@@ -109,13 +109,22 @@ def chunk_text(text: str, source: str) -> list[dict]:
     return chunks
 
 
-def embed_batch(texts: list[str]) -> list[list[float]]:
-    """Embed a batch of texts using Gemini text-embedding-004."""
-    result = genai.embed_content(
-        model=EMBEDDING_MODEL,
-        content=texts,
-    )
-    return result["embedding"]
+def embed_batch(texts: list[str], max_retries: int = 3) -> list[list[float]]:
+    """Embed a batch of texts using Gemini with retry logic."""
+    for attempt in range(max_retries):
+        try:
+            result = genai.embed_content(
+                model=EMBEDDING_MODEL,
+                content=texts,
+            )
+            return result["embedding"]
+        except Exception as e:
+            if attempt < max_retries - 1:
+                wait = 2 ** (attempt + 1)
+                print(f"  [RETRY] embed_batch attempt {attempt + 1}/{max_retries} failed: {e}, waiting {wait}s...")
+                time.sleep(wait)
+            else:
+                raise Exception(f"embed_batch failed after {max_retries} attempts: {e}")
 
 
 def run_ingest():
@@ -208,6 +217,11 @@ def run_ingest():
     print("\n" + "=" * 60)
     print(f"Ingest complete! Total chunks in collection: {final_count}")
     print("=" * 60)
+
+    if final_count == 0:
+        print("[FATAL] Ingest produced 0 chunks — build should fail!")
+        import sys
+        sys.exit(1)
 
 
 if __name__ == "__main__":
