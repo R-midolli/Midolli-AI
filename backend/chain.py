@@ -5,6 +5,7 @@ singleton ChromaDB client, and API timeouts.
 """
 
 import os
+import random
 import re
 import time
 from pathlib import Path
@@ -23,11 +24,12 @@ VECTORSTORE_DIR = Path(__file__).parent / "data" / "vectorstore"
 COLLECTION_NAME = "midolli_knowledge"
 EMBEDDING_MODEL = "models/gemini-embedding-001"
 
-# LLM Models — 3 tiers
+# LLM Models — 4 tiers
 GEMINI_FAST = "gemini-flash-lite-latest"       # Tier 1: greetings & short Q
-GEMINI_NORMAL = "gemini-3-flash-preview"       # Tier 2: standard RAG Q
-GEMINI_BACKUP = "gemini-2.5-flash"             # Tier 2 fallback
-NVIDIA_MODEL = "meta/llama-3.1-70b-instruct"   # Tier 3: deep reasoning
+GEMINI_NORMAL = "gemini-3-flash-preview"       # Tier 2 fallback for Gemini
+GEMINI_BACKUP = "gemini-2.5-flash"             # Last-resort Gemini fallback
+KIMI_MODEL = "moonshotai/kimi-k2.5"            # Priority 1: medium/complex
+GLM_MODEL = "z-ai/glm5"                        # Priority 2: medium/complex
 
 TOP_K = 8
 
@@ -267,55 +269,77 @@ def _try_gemini_greeting(query: str, api_key: str, key_name: str, model_name: st
         raise Exception(f"Gemini greeting {model_name} failed: {e}")
 
 
-def _try_nvidia(query: str, context_chunks: list[dict], history: list) -> dict | None:
-    """Try to get an answer from NVIDIA Build."""
-    try:
-        t0 = time.time()
-        nvidia_key = os.getenv("NVIDIA_API_KEY")
-        if not nvidia_key:
-            raise Exception("NVIDIA_API_KEY not found in environment")
+def _try_nvidia(
+    query: str,
+    context_chunks: list[dict],
+    history: list,
+    api_key_env: str,
+    model_name: str,
+    label: str,
+    max_retries: int = 3,
+) -> dict | None:
+    """Try to get an answer from NVIDIA Build with exponential backoff retry."""
+    api_key = os.getenv(api_key_env)
+    if not api_key:
+        raise Exception(f"{api_key_env} not found in environment")
 
-        client = OpenAI(
-            base_url="https://integrate.api.nvidia.com/v1",
-            api_key=nvidia_key,
-            timeout=30.0,
-        )
+    client = OpenAI(
+        base_url="https://integrate.api.nvidia.com/v1",
+        api_key=api_key,
+        timeout=30.0,
+    )
 
-        context_text = "\n\n---\n\n".join(
-            [f"[Source: {c['source']}]\n{c['content']}" for c in context_chunks]
-        )
+    context_text = "\n\n---\n\n".join(
+        [f"[Source: {c['source']}]\n{c['content']}" for c in context_chunks]
+    )
 
-        messages = [
-            {"role": "system", "content": SYSTEM_PROMPT.format(context=context_text)},
-        ]
+    messages = [
+        {"role": "system", "content": SYSTEM_PROMPT.format(context=context_text)},
+    ]
 
-        for msg in (history or []):
-            role = msg.get("role", "user")
-            messages.append({"role": role, "content": msg.get("content", "")})
+    for msg in (history or []):
+        role = msg.get("role", "user")
+        messages.append({"role": role, "content": msg.get("content", "")})
 
-        messages.append({"role": "user", "content": query})
+    messages.append({"role": "user", "content": query})
 
-        response = client.chat.completions.create(
-            model=NVIDIA_MODEL,
-            messages=messages,
-            temperature=0.3,
-            max_tokens=1024,
-        )
+    last_error = None
+    for attempt in range(max_retries):
+        try:
+            t0 = time.time()
+            response = client.chat.completions.create(
+                model=model_name,
+                messages=messages,
+                temperature=0.4,
+                max_tokens=2048,
+            )
 
-        elapsed = time.time() - t0
-        print(f"[PERF] NVIDIA responded in {elapsed:.2f}s", flush=True)
+            elapsed = time.time() - t0
+            print(f"[PERF] {label} ({model_name}) responded in {elapsed:.2f}s (attempt {attempt + 1})", flush=True)
 
-        if response and response.choices:
-            reply = response.choices[0].message.content
-            sources = list(set(c["source"] for c in context_chunks if c["source"]))
-            return {
-                "reply": reply,
-                "sources": sources,
-                "api_used": f"NVIDIA ({NVIDIA_MODEL})",
-            }
-    except Exception as e:
-        print(f"[WARNING] NVIDIA failed: {e}", flush=True)
-        raise Exception(f"NVIDIA failed: {e}")
+            if response and response.choices and response.choices[0].message.content:
+                reply = response.choices[0].message.content
+                sources = list(set(c["source"] for c in context_chunks if c["source"]))
+                return {
+                    "reply": reply,
+                    "sources": sources,
+                    "api_used": f"{label} ({model_name})",
+                }
+            else:
+                raise Exception(f"{label}: empty response")
+        except Exception as e:
+            last_error = e
+            err_str = str(e).lower()
+            if "429" in str(e) or "rate limit" in err_str or "timeout" in err_str:
+                wait = (2 ** attempt) + random.random()
+                print(f"[RETRY] {label} attempt {attempt + 1}/{max_retries} — waiting {wait:.1f}s — {e}", flush=True)
+                time.sleep(wait)
+                continue
+            else:
+                print(f"[WARNING] {label} failed (non-retryable): {e}", flush=True)
+                break
+
+    raise Exception(f"{label} failed after {max_retries} attempts: {last_error}")
 
 
 # ---------------------------------------------------------------------------
@@ -431,45 +455,61 @@ def answer(query: str, history: list | None = None) -> dict:
 
         # ── NORMAL (standard RAG question) ──
         elif category == "normal":
-            # Tier 2: Gemini 3 Flash Preview
+            # Priority 1: Kimi K2.5
+            try:
+                result = _try_nvidia(query, context_chunks, history_safe, "NVIDIA_API_KEY_1", KIMI_MODEL, "Kimi K2.5")
+                if result:
+                    print(f"[PERF] Total normal time: {time.time() - t0_total:.2f}s", flush=True)
+                    return result
+            except Exception as e:
+                errors.append(f"Kimi:{e}")
+
+            # Priority 2: GLM-5
+            try:
+                result = _try_nvidia(query, context_chunks, history_safe, "NVIDIA_API_KEY_2", GLM_MODEL, "GLM-5")
+                if result:
+                    return result
+            except Exception as e:
+                errors.append(f"GLM:{e}")
+
+            # Fallback: Gemini Normal
             if key1:
                 try:
                     result = _try_gemini(query, context_chunks, history_safe, key1, "KEY_1", GEMINI_NORMAL)
                     if result:
-                        print(f"[PERF] Total normal time: {time.time() - t0_total:.2f}s", flush=True)
                         return result
                 except Exception as e:
                     errors.append(f"G1:{e}")
 
-            # Fallback to Flash Lite
+            # Last resort: Gemini Backup
             if key2:
                 try:
-                    result = _try_gemini(query, context_chunks, history_safe, key2, "KEY_2", GEMINI_FAST)
+                    result = _try_gemini(query, context_chunks, history_safe, key2, "KEY_2", GEMINI_BACKUP)
                     if result:
                         return result
                 except Exception as e:
                     errors.append(f"G2:{e}")
 
-            # Last resort: NVIDIA
-            try:
-                result = _try_nvidia(query, context_chunks, history_safe)
-                if result:
-                    return result
-            except Exception as e:
-                errors.append(f"NV:{e}")
-
         # ── COMPLEX (deep reasoning) ──
         else:
-            # Tier 3: NVIDIA 70B first
+            # Priority 1: Kimi K2.5 (best for analysis)
             try:
-                result = _try_nvidia(query, context_chunks, history_safe)
+                result = _try_nvidia(query, context_chunks, history_safe, "NVIDIA_API_KEY_1", KIMI_MODEL, "Kimi K2.5")
                 if result:
                     print(f"[PERF] Total complex time: {time.time() - t0_total:.2f}s", flush=True)
                     return result
             except Exception as e:
-                errors.append(f"NV:{e}")
+                errors.append(f"Kimi:{e}")
 
-            # Fallback to Gemini Normal
+            # Priority 2: GLM-5
+            try:
+                result = _try_nvidia(query, context_chunks, history_safe, "NVIDIA_API_KEY_2", GLM_MODEL, "GLM-5")
+                if result:
+                    return result
+            except Exception as e:
+                errors.append(f"GLM:{e}")
+
+            # Fallback: Gemini Normal
             if key1:
                 try:
                     result = _try_gemini(query, context_chunks, history_safe, key1, "KEY_1", GEMINI_NORMAL)

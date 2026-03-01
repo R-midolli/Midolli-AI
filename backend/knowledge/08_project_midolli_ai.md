@@ -20,12 +20,12 @@ anglais. Architecture : FastAPI + ChromaDB + Tri-Tier LLM Router.
 
 ## LLM Router Tri-Tier (vérifié dans chain.py)
 - Tier 1 — Saudações (~1s) : gemini-flash-lite-latest, sans RAG, détection regex des salutations
-- Tier 2 — Factuel (~3-4s) : gemini-3-flash-preview + ChromaDB retrieval (TOP_K=8)
-- Tier 3 — Complexe : meta/llama-3.1-70b-instruct via NVIDIA (historique long, questions analytiques)
+- Tier 2/3 — Factuel & Complexe : Kimi K2.5 (moonshotai/kimi-k2.5 via NVIDIA) en priorité,
+  puis GLM-5 (z-ai/glm5 via NVIDIA) en fallback, puis Gemini 3 Flash en dernier recours.
+  3 tentatives + exponential backoff par modèle.
 
-## Fallback Triple API
-Gemini Key #1 → Gemini Key #2 → NVIDIA LLaMA 3.1 70B
-Chaque tier a ses propres fallbacks pour garantir zéro downtime.
+## Fallback Quadruple API
+Kimi K2.5 (NVIDIA Key #1) → GLM-5 (NVIDIA Key #2) → Gemini 3 Flash (Key #1) → Gemini 2.5 Flash (Key #2)
 
 ## UX
 - Timer : "⚡ répondu en Xs" sous chaque bulle de réponse
@@ -47,10 +47,10 @@ Le pipeline d'ingestion lit directement :
 
 ## FAQ
 Q: Comment fonctionne le LLM Router ?
-A: Tri-tier — Tier1 salutations (Gemini Flash Lite ~1s, sans RAG), Tier2 questions factuelles (Gemini 3 Flash ~3-4s, TOP_K=8), Tier3 complexe (LLaMA 3.1 70B NVIDIA, questions analytiques ou historique long).
+A: Tier1 salutations (Gemini Flash Lite ~1s, sans RAG). Tier2/3 questions factuelles et complexes : Kimi K2.5 (NVIDIA) en priorité → GLM-5 (NVIDIA) en fallback → Gemini 3 Flash en dernier recours. Chaque modèle a 3 tentatives avec exponential backoff.
 
 Q: Comment Midolli-AI garantit zéro downtime ?
-A: Triple fallback — Gemini Key #1 → Gemini Key #2 → NVIDIA LLaMA 3.1 70B.
+A: Quadruple fallback — Kimi K2.5 (NVIDIA Key #1) → GLM-5 (NVIDIA Key #2) → Gemini 3 Flash (Key #1) → Gemini 2.5 Flash (Key #2).
 
 Q: Qu'est-ce que le LLM-as-a-Judge ?
 A: evaluate_rag.py compare les réponses du chatbot avec les vérités terrain du qa_dataset.csv et note de 1 à 5 par question.
