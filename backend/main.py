@@ -61,14 +61,23 @@ async def health():
 
 @app.post("/chat", response_model=ChatResponse)
 async def chat(request: ChatRequest):
-    """Chat endpoint — sends question to RAG chain."""
+    """Chat endpoint — sends question to RAG chain (non-blocking)."""
+    import asyncio
+
     if not request.message or not request.message.strip():
         raise HTTPException(
             status_code=400,
             detail="Message cannot be empty. / Le message ne peut pas être vide.",
         )
 
-    result = answer(query=request.message, history=request.history)
+    try:
+        # Run blocking answer() in thread pool so it doesn't block the event loop
+        result = await asyncio.to_thread(
+            answer, query=request.message, history=request.history
+        )
+    except Exception as e:
+        print(f"[ERROR] chat endpoint: {e}", flush=True)
+        raise HTTPException(status_code=500, detail=str(e))
 
     return ChatResponse(
         reply=result["reply"],

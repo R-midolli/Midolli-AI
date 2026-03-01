@@ -1,9 +1,10 @@
 # Formation de Rafael Midolli
 
 ## MBA Intelligence Artificielle & Big Data — USP (Université de São Paulo)
-**06/2024 – 10/2025**
+**06/2024 – 12/2025 (diplômé)**
 - Spécialisation en IA appliquée aux données d'entreprise
-- Travail de fin d'études (TCC) : architecture multi-agents IA dans un pipeline ETL
+- Soutenance de mémoire (TCC) : octobre 2025 — architecture multi-agents IA dans un pipeline ETL
+- Diplôme délivré en décembre 2025
 - Technologies étudiées : LLM, RAG, orchestration multi-agents, LangChain
 
 ## Diplôme d'Ingénieur de Gestion — UFABC
