@@ -219,7 +219,7 @@ def _try_gemini(query: str, context_chunks: list[dict], history: list, api_key: 
         messages = _build_gemini_messages(query, context_chunks, history)
         response = model.generate_content(
             messages,
-            request_options={"timeout": 25},
+            request_options={"timeout": 15},
         )
 
         elapsed = time.time() - t0
@@ -252,7 +252,7 @@ def _try_gemini_greeting(query: str, api_key: str, key_name: str, model_name: st
 
         response = model.generate_content(
             messages,
-            request_options={"timeout": 10},
+            request_options={"timeout": 8},
         )
 
         elapsed = time.time() - t0
@@ -286,7 +286,7 @@ def _try_nvidia(
     client = OpenAI(
         base_url="https://integrate.api.nvidia.com/v1",
         api_key=api_key,
-        timeout=12.0,  # 12s hard cap — cold models skip fast
+        timeout=8.0,  # 8s hard cap — cold NVIDIA models skip fast
     )
 
     context_text = "\n\n---\n\n".join(
@@ -500,7 +500,7 @@ def answer(query: str, history: list | None = None, page_context: str = "") -> d
 
         # ── NORMAL (standard RAG question) ──
         elif category == "normal":
-            # Priority 1: Kimi K2.5
+            # Priority 1: Kimi K2.5 (8s — if warm, responds in ~5s)
             try:
                 result = _try_nvidia(query, context_chunks, history_safe, "NVIDIA_API_KEY_1", KIMI_MODEL, "Kimi K2.5")
                 if result:
@@ -509,15 +509,7 @@ def answer(query: str, history: list | None = None, page_context: str = "") -> d
             except Exception as e:
                 errors.append(f"Kimi:{e}")
 
-            # Priority 2: GLM-5
-            try:
-                result = _try_nvidia(query, context_chunks, history_safe, "NVIDIA_API_KEY_2", GLM_MODEL, "GLM-5")
-                if result:
-                    return result
-            except Exception as e:
-                errors.append(f"GLM:{e}")
-
-            # Fallback: Gemini Normal
+            # Priority 2: Gemini Normal (reliable, ~3-5s)
             if key1:
                 try:
                     result = _try_gemini(query, context_chunks, history_safe, key1, "KEY_1", GEMINI_NORMAL)
@@ -525,6 +517,14 @@ def answer(query: str, history: list | None = None, page_context: str = "") -> d
                         return result
                 except Exception as e:
                     errors.append(f"G1:{e}")
+
+            # Priority 3: GLM-5 (8s)
+            try:
+                result = _try_nvidia(query, context_chunks, history_safe, "NVIDIA_API_KEY_2", GLM_MODEL, "GLM-5")
+                if result:
+                    return result
+            except Exception as e:
+                errors.append(f"GLM:{e}")
 
             # Last resort: Gemini Backup
             if key2:
@@ -537,7 +537,7 @@ def answer(query: str, history: list | None = None, page_context: str = "") -> d
 
         # ── COMPLEX (deep reasoning) ──
         else:
-            # Priority 1: Kimi K2.5 (best for analysis)
+            # Priority 1: Kimi K2.5 (8s — best for analysis if warm)
             try:
                 result = _try_nvidia(query, context_chunks, history_safe, "NVIDIA_API_KEY_1", KIMI_MODEL, "Kimi K2.5")
                 if result:
@@ -546,15 +546,7 @@ def answer(query: str, history: list | None = None, page_context: str = "") -> d
             except Exception as e:
                 errors.append(f"Kimi:{e}")
 
-            # Priority 2: GLM-5
-            try:
-                result = _try_nvidia(query, context_chunks, history_safe, "NVIDIA_API_KEY_2", GLM_MODEL, "GLM-5")
-                if result:
-                    return result
-            except Exception as e:
-                errors.append(f"GLM:{e}")
-
-            # Fallback: Gemini Normal
+            # Priority 2: Gemini Normal (reliable)
             if key1:
                 try:
                     result = _try_gemini(query, context_chunks, history_safe, key1, "KEY_1", GEMINI_NORMAL)
@@ -562,6 +554,14 @@ def answer(query: str, history: list | None = None, page_context: str = "") -> d
                         return result
                 except Exception as e:
                     errors.append(f"G1:{e}")
+
+            # Priority 3: GLM-5 (8s)
+            try:
+                result = _try_nvidia(query, context_chunks, history_safe, "NVIDIA_API_KEY_2", GLM_MODEL, "GLM-5")
+                if result:
+                    return result
+            except Exception as e:
+                errors.append(f"GLM:{e}")
 
             # Last resort: Gemini Backup
             if key2:
