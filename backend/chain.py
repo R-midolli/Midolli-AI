@@ -155,16 +155,37 @@ def _ensure_gemini_configured():
 # Retrieval
 # ---------------------------------------------------------------------------
 def retrieve(query: str) -> list[dict]:
-    """Retrieve top-K relevant chunks for a query."""
+    """Retrieve top-K relevant chunks for a query with API key fallback."""
     try:
-        _ensure_gemini_configured()
-
         t0 = time.time()
-        result = genai.embed_content(
-            model=EMBEDDING_MODEL,
-            content=query,
-        )
-        query_embedding = result["embedding"]
+        
+        key1 = os.getenv("GEMINI_API_KEY_1")
+        key2 = os.getenv("GEMINI_API_KEY_2")
+        
+        keys_to_try = [k for k in [key1, key2] if k]
+        if not keys_to_try:
+            print("[ERROR] No Gemini API key found for embeddings", flush=True)
+            return []
+
+        query_embedding = None
+        last_err = None
+        
+        for idx, embed_key in enumerate(keys_to_try):
+            try:
+                genai.configure(api_key=embed_key)
+                result = genai.embed_content(
+                    model=EMBEDDING_MODEL,
+                    content=query,
+                )
+                query_embedding = result["embedding"]
+                break  # Success
+            except Exception as e:
+                last_err = e
+                print(f"[WARNING] Embedding failed with KEY_{idx+1}: {e}", flush=True)
+
+        if not query_embedding:
+            print(f"[ERROR] All embedding attempts failed. Last error: {last_err}", flush=True)
+            return []
 
         collection = _get_collection()
         results = collection.query(
@@ -201,10 +222,22 @@ def _build_gemini_messages(query: str, context_chunks: list[dict], history: list
         {"role": "model", "parts": ["Understood. I will answer based only on the provided context, in the user's language."]},
     ]
 
+    # Gemini strictly requires alternating roles starting with 'user'
+    # Since we prepend system messages as 'user'/'model', the actual history MUST start with 'user'
+    # so the sequence remains: user -> model (sys prompt) -> user (history 1) -> model (history 2) -> user (current query)
+    valid_history = []
+    expected_next = "user"
     for msg in (history or []):
-        role = "user" if msg.get("role") == "user" else "model"
-        messages.append({"role": role, "parts": [msg.get("content", "")]})
+        raw_role = msg.get("role", "user")
+        role = "user" if raw_role == "user" else "model"
+        
+        # enforce alternation
+        if role == expected_next:
+            valid_history.append({"role": role, "parts": [msg.get("content", "")]})
+            expected_next = "model" if role == "user" else "user"
 
+    messages.extend(valid_history)
+    
     messages.append({"role": "user", "parts": [query]})
     return messages
 
@@ -297,10 +330,16 @@ def _try_nvidia(
         {"role": "system", "content": SYSTEM_PROMPT.format(context=context_text)},
     ]
 
+    # Filter out empty or misaligned history for NVIDIA
+    valid_history = []
+    expected_next = "user"
     for msg in (history or []):
         role = msg.get("role", "user")
-        messages.append({"role": role, "content": msg.get("content", "")})
+        if role in ["user", "assistant"] and role == expected_next:
+            valid_history.append({"role": role, "content": msg.get("content", "")})
+            expected_next = "assistant" if role == "user" else "user"
 
+    messages.extend(valid_history)
     messages.append({"role": "user", "content": query})
 
     last_error = None
