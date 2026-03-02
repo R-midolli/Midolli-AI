@@ -10,6 +10,7 @@ import re
 import time
 from pathlib import Path
 
+import httpx
 import chromadb
 import google.generativeai as genai
 from google.api_core import retry
@@ -177,7 +178,7 @@ def retrieve(query: str) -> list[dict]:
                 result = genai.embed_content(
                     model=EMBEDDING_MODEL,
                     content=query,
-                    request_options={"timeout": 10, "retry": retry.Retry(initial=0, maximum=0, multiplier=1.0, deadline=1.0)}
+                    request_options={"timeout": 4.0, "retry": None}
                 )
                 query_embedding = result["embedding"]
                 break  # Success
@@ -254,7 +255,7 @@ def _try_gemini(query: str, context_chunks: list[dict], history: list, api_key: 
         messages = _build_gemini_messages(query, context_chunks, history)
         response = model.generate_content(
             messages,
-            request_options={"timeout": custom_timeout, "retry": retry.Retry(initial=0, maximum=0, multiplier=1.0, deadline=1.0)},
+            request_options={"timeout": custom_timeout, "retry": None},
         )
 
         elapsed = time.time() - t0
@@ -321,7 +322,7 @@ def _try_nvidia(
     client = OpenAI(
         base_url="https://integrate.api.nvidia.com/v1",
         api_key=api_key,
-        timeout=8.0,  # 8s hard cap — cold NVIDIA models skip fast
+        timeout=httpx.Timeout(8.0),  # 8s hard cap for EVERYTHING (connect, read, write)
     )
 
     context_text = "\n\n---\n\n".join(
@@ -539,6 +540,22 @@ def answer(query: str, history: list | None = None, page_context: str = "") -> d
                         return result
                 except Exception as e:
                     errors.append(f"G1:{e}")
+
+            # Fallback 3: Kimi (NVIDIA)
+            try:
+                result = _try_nvidia(query, context_chunks, history_safe, "NVIDIA_API_KEY_1", KIMI_MODEL, "Kimi K2.5")
+                if result:
+                    return result
+            except Exception as e:
+                errors.append(f"Kimi:{e}")
+
+            # Fallback 4: GLM-5 (NVIDIA)
+            try:
+                result = _try_nvidia(query, context_chunks, history_safe, "NVIDIA_API_KEY_2", GLM_MODEL, "GLM-5")
+                if result:
+                    return result
+            except Exception as e:
+                errors.append(f"GLM:{e}")
 
         # ── NORMAL (standard RAG question) ──
         elif category == "normal":
