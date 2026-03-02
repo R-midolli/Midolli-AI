@@ -244,7 +244,7 @@ def _build_gemini_messages(query: str, context_chunks: list[dict], history: list
     return messages
 
 
-def _try_gemini(query: str, context_chunks: list[dict], history: list, api_key: str, key_name: str, model_name: str) -> dict | None:
+def _try_gemini(query: str, context_chunks: list[dict], history: list, api_key: str, key_name: str, model_name: str, custom_timeout: float = 10.0) -> dict | None:
     """Try to get an answer from Gemini."""
     try:
         t0 = time.time()
@@ -254,7 +254,7 @@ def _try_gemini(query: str, context_chunks: list[dict], history: list, api_key: 
         messages = _build_gemini_messages(query, context_chunks, history)
         response = model.generate_content(
             messages,
-            request_options={"timeout": 15, "retry": retry.Retry(initial=0, maximum=0, multiplier=1.0, deadline=1.0)},
+            request_options={"timeout": custom_timeout, "retry": retry.Retry(initial=0, maximum=0, multiplier=1.0, deadline=1.0)},
         )
 
         elapsed = time.time() - t0
@@ -418,7 +418,7 @@ def _query_category(query: str, history: list) -> str:
     if _is_greeting(query):
         return "greeting"
 
-    if len(history) >= 4 or len(query) > 200:
+    if len(history) >= 6 or len(query) > 250:
         return "complex"
 
     complex_keywords = [
@@ -432,7 +432,8 @@ def _query_category(query: str, history: list) -> str:
         if kw in query_lower:
             return "complex"
 
-    if len(query) < 60 and len(history) <= 2:
+    # Route all standard conversational queries to 'simple' (Flash Lite) for max speed
+    if len(query) < 150:
         return "simple"
 
     return "normal"
@@ -523,7 +524,7 @@ def answer(query: str, history: list | None = None, page_context: str = "") -> d
             # Tier 1: Gemini Flash Lite (cheapest, fastest)
             if key2:
                 try:
-                    result = _try_gemini(query, context_chunks, history_safe, key2, "KEY_2", GEMINI_FAST)
+                    result = _try_gemini(query, context_chunks, history_safe, key2, "KEY_2", GEMINI_FAST, custom_timeout=2.0)
                     if result:
                         print(f"[PERF] Total simple time: {time.time() - t0_total:.2f}s", flush=True)
                         return result
