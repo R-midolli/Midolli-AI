@@ -12,6 +12,7 @@ from pathlib import Path
 
 import chromadb
 import google.generativeai as genai
+from google.api_core import retry
 from openai import OpenAI
 from dotenv import load_dotenv
 
@@ -176,6 +177,7 @@ def retrieve(query: str) -> list[dict]:
                 result = genai.embed_content(
                     model=EMBEDDING_MODEL,
                     content=query,
+                    request_options={"timeout": 10, "retry": retry.Retry(initial=0, maximum=0, multiplier=1.0, deadline=1.0)}
                 )
                 query_embedding = result["embedding"]
                 break  # Success
@@ -252,7 +254,7 @@ def _try_gemini(query: str, context_chunks: list[dict], history: list, api_key: 
         messages = _build_gemini_messages(query, context_chunks, history)
         response = model.generate_content(
             messages,
-            request_options={"timeout": 15},
+            request_options={"timeout": 15, "retry": retry.Retry(initial=0, maximum=0, multiplier=1.0, deadline=1.0)},
         )
 
         elapsed = time.time() - t0
@@ -285,7 +287,7 @@ def _try_gemini_greeting(query: str, api_key: str, key_name: str, model_name: st
 
         response = model.generate_content(
             messages,
-            request_options={"timeout": 8},
+            request_options={"timeout": 8, "retry": retry.Retry(initial=0, maximum=0, multiplier=1.0, deadline=1.0)},
         )
 
         elapsed = time.time() - t0
