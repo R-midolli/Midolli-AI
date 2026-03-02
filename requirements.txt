@@ -6,3 +6,5 @@ chromadb
 openai
 pydantic
 pymupdf
+httpx
+google-api-core
