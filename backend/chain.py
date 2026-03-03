@@ -108,6 +108,8 @@ GREETING_PATTERNS = re.compile(
     r"good (morning|afternoon|evening)|"
     r"what'?s up|sup|hola|"
     r"hi there|hey there|oi tudo|e a[ií]|"
+    r"quem (é|eh) (rafael|midolli|voc[eê])|"
+    r"who (is|are) (you|rafael|midolli)|"
     r"cava|ça va|comment vas|quoi de neuf)[!?.,\s]*$",
     re.IGNORECASE,
 )
@@ -175,7 +177,7 @@ def retrieve(query: str) -> list[dict]:
                 result = genai.embed_content(
                     model=EMBEDDING_MODEL,
                     content=query,
-                    request_options={"timeout": 4.0, "retry": None}
+                    request_options={"timeout": 1.5, "retry": None}
                 )
                 query_embedding = result["embedding"]
                 break  # Success
@@ -497,12 +499,11 @@ def answer(query: str, history: list | None = None, page_context: str = "") -> d
 
         # ── RAG retrieval (only for non-greeting queries) ──
         context_chunks = retrieve(query)
+        # If RAG fails, we don't block. We proceed with an empty context.
+        # The System Prompt already contains a summary of projects.
         if not context_chunks:
-            return {
-                "reply": "I could not find relevant information in my knowledge base. / Je n'ai pas trouvé d'information pertinente dans ma base de connaissances.",
-                "sources": [],
-                "api_used": "none",
-            }
+            print("[WARNING] RAG retrieved 0 chunks. Proceeding with 'No-RAG' fallback context.", flush=True)
+            context_chunks = []
 
         # ── Inject page context as priority hint ──
         if project_hint:
