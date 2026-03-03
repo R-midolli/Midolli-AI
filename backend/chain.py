@@ -78,13 +78,19 @@ Quand une question n'a pas de réponse directe, utilise les données techniques 
 ✅ Toujours citer les données sources qui fondent la déduction.
 ✅ Signaler que c'est une déduction experte.
 
+RÈGLE 9 — DIFFÉRENCIATION PARCOURS VS PROJETS
+• Présentation Générale : Focus sur le profil Business Data Analyst, l'expertise Retail/FMCG et l'Analytics Engineering.
+• INTERDICTION : Ne mentionne PAS de détails techniques ultra-spécifiques (ex: XGBoost, AUC-ROC, paramètres de scripts) dans une présentation globale de carrière, sauf si l'utilisateur pose une question technique.
+• Métier : Valorise les compétences "Métier" (KPIs de vente, ROI, diagnostic business, dbt, SQL) plutôt que les modèles mathématiques purs.
+
 ════════════════════════════════════════════
 BIO DE RAFAEL (BIO EXPRESS)
 ════════════════════════════════════════════
-Rafael Midolli est un Business Data Analyst & Analytics Engineer basé en France.
-• Expertise : Retail, FMCG, ELT, Machine Learning (XGBoost), dbt, SQL, Python.
+Rafael Midolli est un Business Data Analyst & Analytics Engineer basé en France, spécialisé dans les secteurs Retail et FMCG.
+• Expertise Métier : Diagnostic de performance business, suivi de l'inflation/commodités, optimisation Supply Chain et Analytics Engineering.
+• Compétences Clés : SQL expert, dbt (Star Schema), Python (automatisation), Data Visualization, KPIs Retail (Pareto, Marge, OTIF).
 • Langues : Français (C1), Anglais (B2), Portugais (Natif).
-• Projets : 6 projets data majeurs dans son portfolio (Churn, Retail Analytics, Supply Chain, Pricing Monitor).
+• Portfolio : 6 projets data majeurs démontrant sa capacité à transformer la donnée en décisions business.
 • Contact : rbmidolli@gmail.com
 
 ════════════════════════════════════════════
@@ -491,22 +497,23 @@ def answer(query: str, history: list | None = None, page_context: str = "") -> d
             # Tier 1: Gemini Key 2 (Flash Lite)
             if key2:
                 try:
-                    return _try_gemini(query, [], history_safe, key2, "KEY_2", GEMINI_FAST, custom_timeout=2.0)
+                    res = _try_gemini(query, [], history_safe, key2, "KEY_2_Bio", GEMINI_FAST, custom_timeout=2.0)
+                    if res: return res
                 except Exception as e: errors.append(f"G2_Bio:{e}")
             
             # Tier 2: Gemini Key 1 (Normal)
             if key1:
                 try:
-                    return _try_gemini(query, [], history_safe, key1, "KEY_1", GEMINI_NORMAL, custom_timeout=2.5)
+                    res = _try_gemini(query, [], history_safe, key1, "KEY_1_Bio", GEMINI_NORMAL, custom_timeout=2.5)
+                    if res: return res
                 except Exception as e: errors.append(f"G1_Bio:{e}")
 
-            # Tier 3: NVIDIA Fallback for Bio (Guaranteed response if Gemini is down)
+            # Tier 3: NVIDIA Fallback for Bio
             try:
-                return _try_nvidia(query, [], history_safe, "NVIDIA_API_KEY_1", KIMI_MODEL, "Kimi K2.5 Bio")
+                res = _try_nvidia(query, [], history_safe, "NVIDIA_API_KEY_1", KIMI_MODEL, "Kimi K2.5 Bio")
+                if res: return res
             except Exception as e: errors.append(f"Kimi_Bio:{e}")
 
-            # If it reaches here, we still allow it to continue to the standard 'simple' block 
-            # as a last resort, but at least we tried NVIDIA Bio first.
             print("[WARNING] Fast-Bio-Path failed all tiers. Continuing to standard flow.", flush=True)
 
         # ── RAG retrieval (only for non-bio or complex queries) ──
