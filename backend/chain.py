@@ -79,7 +79,16 @@ Quand une question n'a pas de réponse directe, utilise les données techniques 
 ✅ Signaler que c'est une déduction experte.
 
 ════════════════════════════════════════════
-CONTEXTE RÉCUPÉRÉ
+BIO DE RAFAEL (BIO EXPRESS)
+════════════════════════════════════════════
+Rafael Midolli est un Business Data Analyst & Analytics Engineer basé en France.
+• Expertise : Retail, FMCG, ELT, Machine Learning (XGBoost), dbt, SQL, Python.
+• Langues : Français (C1), Anglais (B2), Portugais (Natif).
+• Projets : 6 projets data majeurs dans son portfolio (Churn, Retail Analytics, Supply Chain, Pricing Monitor).
+• Contact : rbmidolli@gmail.com
+
+════════════════════════════════════════════
+CONTEXTE RÉCUPÉRÉ (RAG)
 ════════════════════════════════════════════
 {context}
 """
@@ -102,21 +111,26 @@ Disponible CDI & freelance 2026.
 # ---------------------------------------------------------------------------
 # Greeting Detection
 # ---------------------------------------------------------------------------
+# Broadened to catch "quem é rafael, ..." and other bio variations
 GREETING_PATTERNS = re.compile(
     r"^(h[ie]|hey|hello|howdy|yo|oi|ol[aá]|bom dia|boa (tarde|noite)|"
     r"tudo bem|bonjour|bonsoir|salut|coucou|"
     r"good (morning|afternoon|evening)|"
     r"what'?s up|sup|hola|"
     r"hi there|hey there|oi tudo|e a[ií]|"
-    r"quem (é|eh) (rafael|midolli|voc[eê])|"
-    r"who (is|are) (you|rafael|midolli)|"
     r"cava|ça va|comment vas|quoi de neuf)[!?.,\s]*$",
     re.IGNORECASE,
 )
 
+def _is_bio_query(query: str) -> bool:
+    """Broad check for identity questions to bypass RAG."""
+    q = query.lower()
+    bio_keywords = ["quem é", "rafael", "midolli", "quem eh", "quem e", "sobre você", "você é", "ton parcours", "parcours de rafael", "who is", "who are you", "what can you do"]
+    return any(k in q for k in bio_keywords) or _is_greeting(query)
+
 
 def _is_greeting(query: str) -> bool:
-    """Fast regex check for greetings — no RAG needed."""
+    """Fast regex check for greetings."""
     return bool(GREETING_PATTERNS.match(query.strip()))
 
 
@@ -194,7 +208,7 @@ def retrieve(query: str) -> list[dict]:
             query_embeddings=[query_embedding],
             n_results=TOP_K,
         )
-        print(f"[PERF] Retrieval took {time.time() - t0:.2f}s", flush=True)
+        print(f"[PERF] Retrieval took {time.time() - t0:.2f}s | Chunks: {len(results['documents'][0]) if results and results['documents'] else 0}", flush=True)
 
         chunks = []
         if results and results["documents"]:
@@ -458,6 +472,7 @@ def answer(query: str, history: list | None = None, page_context: str = "") -> d
         t0_total = time.time()
         history_safe = history or []
         category = _query_category(query, history_safe)
+        is_bio = _is_bio_query(query)
 
         # Resolve page context
         project_hint = _resolve_page_context(page_context)
@@ -468,42 +483,36 @@ def answer(query: str, history: list | None = None, page_context: str = "") -> d
         key2 = os.getenv("GEMINI_API_KEY_2")
         errors = []
 
-        print(f"[ROUTER] Query='{query[:60]}...' Category={category}", flush=True)
+        print(f"[ROUTER] Query='{query[:60]}...' Category={category} | BioPath={is_bio}", flush=True)
 
-        # ── GREETING (no RAG, no embedding, ultra-fast) ──
-        if category == "greeting":
+        # ── FAST IDENTITY PATH (No RAG, No Embedding) ──
+        if is_bio and category != "complex":
+            print("[FAST-PATH] Identity/Bio query detected. Skipping RAG.", flush=True)
+            # Use Gemini Tier 1 directly with bio knowledge
             if key2:
                 try:
-                    result = _try_gemini_greeting(query, key2, "KEY_2", GEMINI_FAST)
+                    result = _try_gemini(query, [], history_safe, key2, "KEY_2", GEMINI_FAST, custom_timeout=2.5)
                     if result:
-                        print(f"[PERF] Total greeting time: {time.time() - t0_total:.2f}s", flush=True)
+                        print(f"[PERF] Total Fast Bio time: {time.time() - t0_total:.2f}s", flush=True)
                         return result
                 except Exception as e:
                     errors.append(f"G2:{e}")
-
+            
             if key1:
                 try:
-                    result = _try_gemini_greeting(query, key1, "KEY_1", GEMINI_FAST)
+                    result = _try_gemini(query, [], history_safe, key1, "KEY_1", GEMINI_NORMAL, custom_timeout=3.5)
                     if result:
-                        print(f"[PERF] Total greeting time: {time.time() - t0_total:.2f}s", flush=True)
                         return result
                 except Exception as e:
                     errors.append(f"G1:{e}")
 
-            # Hardcoded fallback for greetings (instant)
-            return {
-                "reply": "Bonjour ! Je suis Midolli-AI, l'assistant de Rafael Midolli. Comment puis-je vous aider ? 😊 / Hello! I'm Midolli-AI, Rafael Midolli's assistant. How can I help you?",
-                "sources": [],
-                "api_used": "fallback",
-            }
-
-        # ── RAG retrieval (only for non-greeting queries) ──
-        context_chunks = retrieve(query)
-        # If RAG fails, we don't block. We proceed with an empty context.
-        # The System Prompt already contains a summary of projects.
-        if not context_chunks:
-            print("[WARNING] RAG retrieved 0 chunks. Proceeding with 'No-RAG' fallback context.", flush=True)
-            context_chunks = []
+        # ── RAG retrieval (only for non-bio or complex queries) ──
+        context_chunks = []
+        if not is_bio or category == "complex":
+            context_chunks = retrieve(query)
+            if not context_chunks:
+                print("[WARNING] RAG retrieved 0 chunks. Proceeding with System Bio context.", flush=True)
+                context_chunks = []
 
         # ── Inject page context as priority hint ──
         if project_hint:
