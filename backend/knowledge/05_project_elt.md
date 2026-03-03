@@ -37,11 +37,11 @@ Python (extraction), PostgreSQL (Docker), dbt (transformations Star Schema), Pow
 - Dataset : Online Retail II (UCI)
 - Architecture : ELT avec dbt Star Schema
 - Stockage : PostgreSQL via Docker
+- Modèle dbt vérifié : La table `fact_sales` agrège `invoice_no`, `quantity`, `unit_price`, et `line_amount`. Elle est liée aux tables `dim_customers`, `dim_products` et `dim_date`.
 - Dashboard : Power BI avec mesures DAX personnalisées
 
 ## Affirmations interdites → FALLBACK
 - Aucune métrique chiffrée de performance (non publiée)
-- Nombre exact de lignes du dataset (non mentionné)
 
 ## FAQ
 Q: Différence ELT vs ETL ?

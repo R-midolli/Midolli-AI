@@ -87,6 +87,27 @@ def read_knowledge_files() -> list[dict]:
         else:
             print(f"  [WARNING] Could not find README for {project_name}")
 
+    print("\n[Step 1.6] Reading deep technical source code files...")
+    technical_files = {
+        "ELT_retail_analytics": ["src/load_raw_online_retail.py", "dbt_retail/models/marts/core/fact_sales.sql", "dbt_retail/models/marts/core/dim_customers.sql"],
+        "Customer Churn Prediction & Reactivation Propensity": ["src/features.py", "src/model.py", "src/roi.py"],
+        "supply_chain_analytics": ["src/etl.py"],
+        "retail-ba-diagnostic": ["src/etl_pipeline.py"],
+        "fmcg_pricing_macro_monitor": ["src/extract/ecb_api.py", "src/extract/insee_api.py", "src/extract/commodities_api.py", "src/transform/build_marts.py"]
+    }
+
+    for proj, files in technical_files.items():
+        base_path = WORKSPACE_DIR / proj
+        for file_rel in files:
+            file_path = base_path / file_rel
+            if file_path.exists():
+                content = file_path.read_text(encoding="utf-8")
+                source_name = f"{proj}/{file_rel}"
+                documents.append({"source": source_name, "content": f"// Source Code File: {source_name}\n\n{content}"})
+                print(f"  [OK] Read Tech File {source_name} ({len(content)} chars)")
+            else:
+                print(f"  [WARNING] Could not find Tech File {proj}/{file_rel}")
+
     return documents
 
 
