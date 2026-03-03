@@ -34,6 +34,7 @@ Python 3.12, DuckDB, Apache ECharts, GitHub Actions (CI/CD), Git/GitHub
 - 4 sources d'API : BCE, INSEE, Yahoo Finance, Open Food Facts
 - Pipeline automatisé CI/CD GitHub Actions
 - Corrélation matières premières vs IPC par catégorie alimentaire
+- Matières premières (commodities) suivies spécifiquement : Cacao, Sucre, Café, Blé
 - DuckDB comme moteur analytique embarqué
 - Dashboard ECharts interactif
 
