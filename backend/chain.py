@@ -488,23 +488,26 @@ def answer(query: str, history: list | None = None, page_context: str = "") -> d
         # ── FAST IDENTITY PATH (No RAG, No Embedding) ──
         if is_bio and category != "complex":
             print("[FAST-PATH] Identity/Bio query detected. Skipping RAG.", flush=True)
-            # Use Gemini Tier 1 directly with bio knowledge
+            # Tier 1: Gemini Key 2 (Flash Lite)
             if key2:
                 try:
-                    result = _try_gemini(query, [], history_safe, key2, "KEY_2", GEMINI_FAST, custom_timeout=2.5)
-                    if result:
-                        print(f"[PERF] Total Fast Bio time: {time.time() - t0_total:.2f}s", flush=True)
-                        return result
-                except Exception as e:
-                    errors.append(f"G2:{e}")
+                    return _try_gemini(query, [], history_safe, key2, "KEY_2", GEMINI_FAST, custom_timeout=2.0)
+                except Exception as e: errors.append(f"G2_Bio:{e}")
             
+            # Tier 2: Gemini Key 1 (Normal)
             if key1:
                 try:
-                    result = _try_gemini(query, [], history_safe, key1, "KEY_1", GEMINI_NORMAL, custom_timeout=3.5)
-                    if result:
-                        return result
-                except Exception as e:
-                    errors.append(f"G1:{e}")
+                    return _try_gemini(query, [], history_safe, key1, "KEY_1", GEMINI_NORMAL, custom_timeout=2.5)
+                except Exception as e: errors.append(f"G1_Bio:{e}")
+
+            # Tier 3: NVIDIA Fallback for Bio (Guaranteed response if Gemini is down)
+            try:
+                return _try_nvidia(query, [], history_safe, "NVIDIA_API_KEY_1", KIMI_MODEL, "Kimi K2.5 Bio")
+            except Exception as e: errors.append(f"Kimi_Bio:{e}")
+
+            # If it reaches here, we still allow it to continue to the standard 'simple' block 
+            # as a last resort, but at least we tried NVIDIA Bio first.
+            print("[WARNING] Fast-Bio-Path failed all tiers. Continuing to standard flow.", flush=True)
 
         # ── RAG retrieval (only for non-bio or complex queries) ──
         context_chunks = []
