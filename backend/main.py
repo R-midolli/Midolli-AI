@@ -6,6 +6,7 @@ POST /chat   → RAG chatbot endpoint
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from pydantic import Field
 from pydantic import BaseModel
 
 from backend.chain import answer
@@ -41,7 +42,7 @@ app.add_middleware(
 # ---------------------------------------------------------------------------
 class ChatRequest(BaseModel):
     message: str
-    history: list = []
+    history: list = Field(default_factory=list)
     lang: str = "fr"
     page_context: str = ""
 

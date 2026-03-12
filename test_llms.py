@@ -1,7 +1,7 @@
 import os
 from openai import OpenAI
 from dotenv import load_dotenv
-import google.generativeai as genai
+from google import genai
 
 load_dotenv()
 
@@ -36,9 +36,11 @@ except Exception as e:
 # Test Gemini
 print("\nTesting Gemini...")
 try:
-    genai.configure(api_key=os.getenv("GEMINI_API_KEY_1"))
-    for m in genai.list_models():
-        if "generateContent" in m.supported_generation_methods:
-            print(m.name)
+    api_key = os.getenv("GEMINI_API_KEY_1") or os.getenv("GOOGLE_API_KEY_1")
+    client = genai.Client(api_key=api_key)
+    for model in client.models.list():
+        if "generateContent" in (model.supported_actions or []):
+            print(model.name)
+    client.close()
 except Exception as e:
     print("Gemini Failed:", e)

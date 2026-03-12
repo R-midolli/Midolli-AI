@@ -11,7 +11,8 @@ from pathlib import Path
 
 import chromadb
 import fitz  # pymupdf
-import google.generativeai as genai
+from google import genai
+from google.genai import types
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -31,6 +32,31 @@ CHUNK_SIZE = 700
 CHUNK_OVERLAP = 100
 BATCH_SIZE = 50
 EMBEDDING_MODEL = "models/gemini-embedding-001"
+
+
+def _get_env_value(*names: str) -> str | None:
+    for name in names:
+        value = os.getenv(name)
+        if value:
+            return value
+    return None
+
+
+def _get_gemini_keys() -> list[str]:
+    keys = [
+        _get_env_value("GEMINI_API_KEY_1", "GOOGLE_API_KEY_1", "GEMINI_API_KEY", "GOOGLE_API_KEY"),
+        _get_env_value("GEMINI_API_KEY_2", "GOOGLE_API_KEY_2"),
+    ]
+    unique_keys = []
+    for key in keys:
+        if key and key not in unique_keys:
+            unique_keys.append(key)
+    return unique_keys
+
+
+def _get_gemini_http_options(timeout_seconds: float = 10.0) -> types.HttpOptions:
+    timeout_ms = max(10000, int(timeout_seconds * 1000))
+    return types.HttpOptions(timeout=timeout_ms)
 
 
 def extract_pdf_text(pdf_path: Path) -> str:
@@ -132,23 +158,24 @@ def chunk_text(text: str, source: str) -> list[dict]:
 
 def embed_batch(texts: list[str], max_retries: int = 3) -> list[list[float]]:
     """Embed a batch of texts using Gemini with retry and key fallback logic."""
-    key1 = os.getenv("GEMINI_API_KEY_1")
-    key2 = os.getenv("GEMINI_API_KEY_2")
-    keys_to_try = [k for k in [key1, key2] if k]
+    keys_to_try = _get_gemini_keys()
 
     if not keys_to_try:
         raise Exception("No Gemini API key found for embeddings")
 
     last_err = None
     for api_key in keys_to_try:
-        genai.configure(api_key=api_key)
+        client = genai.Client(api_key=api_key)
         for attempt in range(max_retries):
             try:
-                result = genai.embed_content(
+                result = client.models.embed_content(
                     model=EMBEDDING_MODEL,
-                    content=texts,
+                    contents=texts,
+                    config=types.EmbedContentConfig(
+                        httpOptions=_get_gemini_http_options(),
+                    ),
                 )
-                return result["embedding"]
+                return [embedding.values for embedding in result.embeddings]
             except Exception as e:
                 last_err = e
                 # Check for quota exceeded error (429) to immediately fallback to next key
@@ -160,6 +187,7 @@ def embed_batch(texts: list[str], max_retries: int = 3) -> list[list[float]]:
                     wait = 2 ** (attempt + 1)
                     print(f"  [RETRY] embed_batch attempt {attempt + 1}/{max_retries} failed: {e}, waiting {wait}s...")
                     time.sleep(wait)
+            client.close()
     
     raise Exception(f"embed_batch failed on all keys. Last error: {last_err}")
 
@@ -170,12 +198,10 @@ def run_ingest():
     print("Midolli-AI — Ingest Pipeline")
     print("=" * 60)
 
-    # Configure Gemini API initially (not strictly needed as embed_batch loops keys, but good for validation)
-    api_key = os.getenv("GEMINI_API_KEY_1") or os.getenv("GEMINI_API_KEY_2")
-    if not api_key:
-        print("[ERROR] Neither GEMINI_API_KEY_1 nor GEMINI_API_KEY_2 found in .env")
+    api_keys = _get_gemini_keys()
+    if not api_keys:
+        print("[ERROR] No Gemini API key found in .env")
         return
-    genai.configure(api_key=api_key)
 
     # Step 1: Read knowledge files
     print("\n[Step 1] Reading knowledge files...")

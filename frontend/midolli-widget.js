@@ -18,6 +18,8 @@
       disclaimer: "Midolli-AI peut faire des erreurs.",
       subtitle: "Assistant Data Portfolio",
       send: "Envoyer",
+      error: "Désolé, une erreur est survenue. Veuillez réessayer.",
+      timeout: "Le serveur a mis trop de temps à répondre. Veuillez réessayer dans quelques secondes.",
     },
     en: {
       welcome:
@@ -27,6 +29,8 @@
       disclaimer: "Midolli-AI can make mistakes.",
       subtitle: "Data Portfolio Assistant",
       send: "Send",
+      error: "Sorry, an error occurred. Please try again.",
+      timeout: "The server took too long to respond. Please try again in a few seconds.",
     },
   };
 
@@ -36,6 +40,7 @@
   let _cfg = { apiUrl: "", lang: "fr", theme: "dark" };
   let _isOpen = false;
   let _hasOpened = false;
+  let _isSending = false;
   let _history = [];
   let _els = {};
 
@@ -425,10 +430,18 @@
     if (typing) typing.remove();
   }
 
+  function setComposerBusy(isBusy) {
+    _isSending = isBusy;
+    _els.textarea.disabled = isBusy;
+    _els.sendBtn.disabled = isBusy || !_els.textarea.value.trim();
+  }
+
   // ---------------------------------------------------------------
   // Send message
   // ---------------------------------------------------------------
   function sendMessage() {
+    if (_isSending) return;
+
     var text = _els.textarea.value.trim();
     if (!text) return;
 
@@ -446,15 +459,23 @@
 
     // Show typing
     showTyping();
+    setComposerBusy(true);
+
+    var controller = new AbortController();
+    var timeoutId = setTimeout(function () {
+      controller.abort();
+    }, 20000);
 
     // API call
     fetch(_cfg.apiUrl + "/chat", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
+      signal: controller.signal,
       body: JSON.stringify({
         message: text,
         history: _history.slice(-6),
         lang: _cfg.lang,
+        page_context: window.location.pathname,
       }),
     })
       .then(function (res) {
@@ -469,12 +490,14 @@
       })
       .catch(function (err) {
         hideTyping();
-        var errMsg =
-          _cfg.lang === "fr"
-            ? "Désolé, une erreur est survenue. Veuillez réessayer."
-            : "Sorry, an error occurred. Please try again.";
+        var errMsg = err && err.name === "AbortError" ? t().timeout : t().error;
         renderMessage(errMsg, "bot");
         console.error("[Midolli-AI]", err);
+      })
+      .finally(function () {
+        clearTimeout(timeoutId);
+        setComposerBusy(false);
+        _els.textarea.focus();
       });
   }
 

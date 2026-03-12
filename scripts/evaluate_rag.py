@@ -9,7 +9,8 @@ import os
 import time
 from pathlib import Path
 
-import google.generativeai as genai
+from google import genai
+from google.genai import types
 from dotenv import load_dotenv
 
 import sys
@@ -22,11 +23,15 @@ DATASET_PATH = Path(__file__).parent.parent / "tests" / "qa_dataset.csv"
 REPORT_DIR = Path(__file__).parent.parent / "reports"
 REPORT_PATH = REPORT_DIR / "rag_evaluation_results.csv"
 
-# Configure Gemini for evaluation
-api_key = os.getenv("GEMINI_API_KEY_1")
-genai.configure(api_key=api_key)
-# Explicitly use Gemini 2.5 Flash for evaluation (api stability)
-eval_model = genai.GenerativeModel("gemini-2.5-flash")
+
+def _get_eval_client() -> genai.Client:
+    api_key = (
+        os.getenv("GEMINI_API_KEY_1")
+        or os.getenv("GOOGLE_API_KEY_1")
+        or os.getenv("GEMINI_API_KEY")
+        or os.getenv("GOOGLE_API_KEY")
+    )
+    return genai.Client(api_key=api_key)
 
 EVAL_PROMPT = """You are an impartial AI judge. Evaluate the RAG system's generated answer against the ground truth Expected Answer.
 Ignore formatting or language differences as long as the factual core is identical and correct.
@@ -62,6 +67,8 @@ def evaluate():
         reader = csv.DictReader(f)
         questions = list(reader)
 
+    eval_client = _get_eval_client()
+
     total_score = 0
     
     for row in questions:
@@ -82,7 +89,15 @@ def evaluate():
         # 2. Call Evaluator LLM
         prompt = EVAL_PROMPT.format(expected=expected, generated=generated)
         try:
-            eval_res = eval_model.generate_content(prompt)
+            eval_res = eval_client.models.generate_content(
+                model="gemini-2.5-flash",
+                contents=prompt,
+                config=types.GenerateContentConfig(
+                    temperature=0,
+                    maxOutputTokens=256,
+                    httpOptions=types.HttpOptions(timeout=10000),
+                ),
+            )
             # Clean possible markdown from response
             raw_text = eval_res.text.strip().removeprefix('```json').removeprefix('```').removesuffix('```').strip()
             eval_json = json.loads(raw_text)
@@ -123,6 +138,8 @@ def evaluate():
         ])
         writer.writeheader()
         writer.writerows(results)
+
+    eval_client.close()
     
     print(f"Detailed report saved to {REPORT_PATH}")
 

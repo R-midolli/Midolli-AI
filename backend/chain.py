@@ -12,8 +12,8 @@ from pathlib import Path
 
 import httpx
 import chromadb
-import google.generativeai as genai
-from google.api_core import retry
+from google import genai
+from google.genai import types
 from openai import OpenAI
 from dotenv import load_dotenv
 
@@ -26,14 +26,39 @@ VECTORSTORE_DIR = Path(__file__).parent / "data" / "vectorstore"
 COLLECTION_NAME = "midolli_knowledge"
 EMBEDDING_MODEL = "models/gemini-embedding-001"
 
-# LLM Models — 4 tiers
-GEMINI_FAST = "gemini-flash-lite-latest"       # Tier 1: greetings & short Q
-GEMINI_NORMAL = "gemini-3-flash-preview"       # Tier 2 fallback for Gemini
-GEMINI_BACKUP = "gemini-2.5-flash"             # Last-resort Gemini fallback
-KIMI_MODEL = "moonshotai/kimi-k2.5"            # Priority 1: medium/complex
-GLM_MODEL = "z-ai/glm5"                        # Priority 2: medium/complex
+# LLM Models — Updated 2026 for max speed
+GEMINI_LITE_31 = "gemini-3.1-flash-lite-preview"  # Tier 1: ultra-fast, latest
+GEMINI_LITE_LATEST = "gemini-flash-lite-latest"   # Tier 2: reliable lite model
+GEMINI_NORMAL = "gemini-3-flash-preview"          # Tier 3: standard flash
+KIMI_MODEL = "moonshotai/kimi-k2.5"               # Fallback 1: complex queries
+GLM_MODEL = "z-ai/glm5"                           # Fallback 2: complex queries
+GEMINI_BACKUP = "gemini-2.5-flash"                # Last resort fallback
 
 TOP_K = 8
+
+LOCAL_GREETING_REPLIES = {
+    "pt": "Olá! Sou o Midolli-AI, assistente do portfólio do Rafael Midolli. Posso resumir a trajetória dele, explicar os projetos e detalhar a stack usada em cada caso.",
+    "en": "Hello! I'm Midolli-AI, Rafael Midolli's portfolio assistant. I can summarize his background, explain the projects, and detail the stack used in each one.",
+    "fr": "Bonjour ! Je suis Midolli-AI, l'assistant du portfolio de Rafael Midolli. Je peux résumer son parcours, expliquer ses projets et détailler la stack utilisée dans chacun d'eux.",
+}
+
+LOCAL_BIO_REPLIES = {
+    "pt": "Rafael Midolli é um Business Data Analyst e Analytics Engineer baseado na França, especializado em Retail e FMCG. Ele combina SQL, dbt, Python e visualização de dados para transformar dados em decisões de negócio, com foco em performance comercial, supply chain, pricing e analytics engineering.",
+    "en": "Rafael Midolli is a Business Data Analyst and Analytics Engineer based in France, specialized in Retail and FMCG. He combines SQL, dbt, Python, and data visualization to turn data into business decisions, with a focus on commercial performance, supply chain, pricing, and analytics engineering.",
+    "fr": "Rafael Midolli est un Business Data Analyst et Analytics Engineer basé en France, spécialisé en Retail et FMCG. Il combine SQL, dbt, Python et data visualisation pour transformer la donnée en décisions business, avec un focus sur la performance commerciale, la supply chain, le pricing et l'analytics engineering.",
+}
+
+OUT_OF_SCOPE_REPLIES = {
+    "pt": "Não tenho essa informação específica na base do portfólio. Posso responder sobre o percurso do Rafael, as competências dele e os projetos do portfólio.",
+    "en": "I don't have that specific information in the portfolio knowledge base. I can answer about Rafael's background, skills, and portfolio projects.",
+    "fr": "Je n'ai pas cette information précise dans la base du portfolio. Je peux répondre sur le parcours de Rafael, ses compétences et les projets du portfolio.",
+}
+
+DBT_PROJECT_REPLIES = {
+    "pt": "Sim. O projeto em que o uso de dbt está explicitamente documentado é o ELT Retail Analytics. Nele, o Rafael usa Python para ingestão, PostgreSQL em Docker para armazenamento e dbt para transformar os dados de staging até marts e reporting em Star Schema.",
+    "en": "Yes. The project where dbt usage is explicitly documented is ELT Retail Analytics. In that project, Rafael uses Python for ingestion, PostgreSQL in Docker for storage, and dbt to transform data from staging to marts and reporting in a Star Schema.",
+    "fr": "Oui. Le projet où l'utilisation de dbt est explicitement documentée est ELT Retail Analytics. Rafael y utilise Python pour l'ingestion, PostgreSQL dans Docker pour le stockage, et dbt pour transformer les données de staging vers les marts et le reporting en Star Schema.",
+}
 
 # ---------------------------------------------------------------------------
 # System Prompt
@@ -128,16 +153,159 @@ GREETING_PATTERNS = re.compile(
     re.IGNORECASE,
 )
 
+ELONGATED_GREETING_PATTERNS = [
+    re.compile(r"^o+i+$", re.IGNORECASE),
+    re.compile(r"^o+l+a+$", re.IGNORECASE),
+    re.compile(r"^h+i+$", re.IGNORECASE),
+    re.compile(r"^h+e+y+$", re.IGNORECASE),
+]
+
+BIO_PATTERNS = [
+    re.compile(r"\bquem\s+(é|e|eh)\s+(o\s+)?rafael\b", re.IGNORECASE),
+    re.compile(r"\bfale\s+sobre\s+(o\s+)?rafael\b", re.IGNORECASE),
+    re.compile(r"\bsobre\s+(o\s+)?rafael\b", re.IGNORECASE),
+    re.compile(r"\bwho\s+is\s+rafael\b", re.IGNORECASE),
+    re.compile(r"\btell\s+me\s+about\s+rafael\b", re.IGNORECASE),
+    re.compile(r"\babout\s+rafael\b", re.IGNORECASE),
+    re.compile(r"\bqui\s+est\s+rafael\b", re.IGNORECASE),
+    re.compile(r"\bparcours\s+de\s+rafael\b", re.IGNORECASE),
+    re.compile(r"\bprésente\s+rafael\b", re.IGNORECASE),
+    re.compile(r"\bwho\s+are\s+you\b", re.IGNORECASE),
+    re.compile(r"\bwhat\s+can\s+you\s+do\b", re.IGNORECASE),
+    re.compile(r"\bquem\s+é\s+você\b", re.IGNORECASE),
+]
+
+OUT_OF_SCOPE_PATTERNS = [
+    re.compile(r"\bgosta\s+de\b", re.IGNORECASE),
+    re.compile(r"\baime\b", re.IGNORECASE),
+    re.compile(r"\blikes?\b", re.IGNORECASE),
+    re.compile(r"\bfavorite\b", re.IGNORECASE),
+    re.compile(r"\bhobb(y|ies)\b", re.IGNORECASE),
+    re.compile(r"\banimais?\b", re.IGNORECASE),
+    re.compile(r"\banimals?\b", re.IGNORECASE),
+    re.compile(r"\bcomida\b", re.IGNORECASE),
+    re.compile(r"\bfood\b", re.IGNORECASE),
+    re.compile(r"\bpet(s)?\b", re.IGNORECASE),
+]
+
+
+def _get_env_value(*names: str) -> str | None:
+    """Return the first non-empty environment variable among aliases."""
+    for name in names:
+        value = os.getenv(name)
+        if value:
+            return value
+    return None
+
+
+def _get_gemini_keys() -> list[str]:
+    """Return configured Gemini keys, supporting legacy and current env names."""
+    keys = [
+        _get_env_value("GEMINI_API_KEY_1", "GOOGLE_API_KEY_1", "GEMINI_API_KEY"),
+        _get_env_value("GEMINI_API_KEY_2", "GOOGLE_API_KEY_2"),
+    ]
+    unique_keys = []
+    for key in keys:
+        if key and key not in unique_keys:
+            unique_keys.append(key)
+    return unique_keys
+
+
+def _get_nvidia_key(slot: str) -> str | None:
+    """Return NVIDIA API key, accepting both single-key and multi-key env styles."""
+    if slot == "NVIDIA_API_KEY_2":
+        return _get_env_value("NVIDIA_API_KEY_2", "NVIDIA_API_KEY")
+    return _get_env_value("NVIDIA_API_KEY_1", "NVIDIA_API_KEY")
+
+
+def _get_gemini_client(api_key: str) -> genai.Client:
+    """Create a Gemini client bound to one API key."""
+    return genai.Client(api_key=api_key)
+
+
+def _get_gemini_http_options(timeout_seconds: float) -> types.HttpOptions:
+    """google.genai enforces a minimum request timeout of 10 seconds."""
+    timeout_ms = max(10000, int(timeout_seconds * 1000))
+    return types.HttpOptions(timeout=timeout_ms)
+
+
+def _detect_language(query: str) -> str:
+    """Best-effort language detection for deterministic fallback replies."""
+    q = (query or "").lower()
+
+    pt_markers = ["quem", "projetos", "voce", "você", "quais", "sobre", "ola", "olá", "oi", "trajetória", "gosta", "animais", "comida"]
+    en_markers = ["who", "what", "about", "projects", "skills", "hello", "tell me"]
+
+    if any(marker in q for marker in pt_markers):
+        return "pt"
+    if any(marker in q for marker in en_markers):
+        return "en"
+    return "fr"
+
+
+def _language_instruction(query: str) -> str:
+    """Explicit response-language hint for external models."""
+    language = _detect_language(query)
+    if language == "pt":
+        return "Réponds strictement en portugais."
+    if language == "en":
+        return "Respond strictly in English."
+    return "Réponds strictement en français."
+
+
+def _local_greeting_reply(query: str) -> str:
+    return LOCAL_GREETING_REPLIES[_detect_language(query)]
+
+
+def _local_bio_reply(query: str) -> str:
+    return LOCAL_BIO_REPLIES[_detect_language(query)]
+
+
+def _local_out_of_scope_reply(query: str) -> str:
+    return OUT_OF_SCOPE_REPLIES[_detect_language(query)]
+
+
+def _local_dbt_project_reply(query: str) -> str:
+    return DBT_PROJECT_REPLIES[_detect_language(query)]
+
+
+def _is_out_of_scope_personal_query(query: str) -> bool:
+    """Detect personal-preference questions that are outside the portfolio knowledge base."""
+    normalized = query.strip()
+    return any(pattern.search(normalized) for pattern in OUT_OF_SCOPE_PATTERNS)
+
+
+def _is_dbt_project_query(query: str) -> bool:
+    """Detect direct questions about whether Rafael used dbt in his projects."""
+    normalized = (query or "").lower()
+    if "dbt" not in normalized:
+        return False
+
+    project_markers = [
+        "project", "projects", "projet", "projets", "utilisant", "utilizando",
+        "using", "used", "feito", "fait", "fez", "did", "avec", "com",
+    ]
+    return any(marker in normalized for marker in project_markers)
+
 def _is_bio_query(query: str) -> bool:
-    """Broad check for identity questions to bypass RAG."""
-    q = query.lower()
-    bio_keywords = ["quem é", "rafael", "midolli", "quem eh", "quem e", "sobre você", "você é", "ton parcours", "parcours de rafael", "who is", "who are you", "what can you do"]
-    return any(k in q for k in bio_keywords) or _is_greeting(query)
+    """Check for direct identity/profile questions without hijacking project questions."""
+    normalized = query.strip()
+    if any(pattern.search(normalized) for pattern in BIO_PATTERNS):
+        return True
+
+    normalized_lower = normalized.lower()
+    if any(marker in normalized_lower for marker in ["quem é", "quem e", "quem eh", "who is", "qui est", "sobre", "about"]):
+        return bool(re.search(r"\braf[a-z]*\b", normalized_lower))
+
+    return False
 
 
 def _is_greeting(query: str) -> bool:
     """Fast regex check for greetings."""
-    return bool(GREETING_PATTERNS.match(query.strip()))
+    stripped = query.strip()
+    return bool(GREETING_PATTERNS.match(stripped)) or any(
+        pattern.match(stripped) for pattern in ELONGATED_GREETING_PATTERNS
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -157,33 +325,14 @@ def _get_collection():
 
 
 # ---------------------------------------------------------------------------
-# Configure Gemini Once
-# ---------------------------------------------------------------------------
-_gemini_configured = False
-
-
-def _ensure_gemini_configured():
-    """Configure Gemini API key once at module level."""
-    global _gemini_configured
-    if not _gemini_configured:
-        api_key = os.getenv("GEMINI_API_KEY_1") or os.getenv("GEMINI_API_KEY_2")
-        if api_key:
-            genai.configure(api_key=api_key)
-            _gemini_configured = True
-
-
-# ---------------------------------------------------------------------------
 # Retrieval
 # ---------------------------------------------------------------------------
 def retrieve(query: str) -> list[dict]:
     """Retrieve top-K relevant chunks for a query with API key fallback."""
     try:
         t0 = time.time()
-        
-        key1 = os.getenv("GEMINI_API_KEY_1")
-        key2 = os.getenv("GEMINI_API_KEY_2")
-        
-        keys_to_try = [k for k in [key1, key2] if k]
+
+        keys_to_try = _get_gemini_keys()
         if not keys_to_try:
             print("[ERROR] No Gemini API key found for embeddings", flush=True)
             return []
@@ -192,21 +341,28 @@ def retrieve(query: str) -> list[dict]:
         last_err = None
         
         for idx, embed_key in enumerate(keys_to_try):
+            client = None
             try:
-                genai.configure(api_key=embed_key)
-                result = genai.embed_content(
+                client = _get_gemini_client(embed_key)
+                result = client.models.embed_content(
                     model=EMBEDDING_MODEL,
-                    content=query,
-                    request_options={"timeout": 1.5, "retry": None}
+                    contents=query,
+                    config=types.EmbedContentConfig(
+                        httpOptions=_get_gemini_http_options(10.0),
+                    ),
                 )
-                query_embedding = result["embedding"]
+                query_embedding = result.embeddings[0].values
                 break  # Success
             except Exception as e:
                 last_err = e
-                print(f"[WARNING] Embedding failed with KEY_{idx+1}: {e}", flush=True)
+                if idx == len(keys_to_try) - 1:
+                    print(f"[ERROR] Embedding failed for all keys. Last: {e}", flush=True)
+            finally:
+                if client is not None:
+                    client.close()
 
         if not query_embedding:
-            print(f"[ERROR] All embedding attempts failed. Last error: {last_err}", flush=True)
+            print(f"[ERROR] Retrieval aborted because query embedding could not be created. Last error: {last_err}", flush=True)
             return []
 
         collection = _get_collection()
@@ -233,48 +389,46 @@ def retrieve(query: str) -> list[dict]:
 # ---------------------------------------------------------------------------
 # LLM Calls
 # ---------------------------------------------------------------------------
-def _build_gemini_messages(query: str, context_chunks: list[dict], history: list) -> list[dict]:
-    """Build the chat messages for Gemini."""
+def _build_gemini_contents(query: str, history: list) -> str:
+    """Build a plain-text conversation transcript for google.genai."""
+    lines = []
+    for msg in history or []:
+        content = (msg.get("content") or "").strip()
+        if not content:
+            continue
+        role = "User" if msg.get("role") == "user" else "Assistant"
+        lines.append(f"{role}: {content}")
+
+    transcript = "\n".join(lines)
+    if transcript:
+        return f"Conversation history:\n{transcript}\n\nCurrent user question:\n{query}"
+    return query
+
+
+def _build_gemini_system_instruction(query: str, context_chunks: list[dict]) -> str:
+    """Build the system instruction with retrieved context and language hint."""
     context_text = "\n\n---\n\n".join(
         [f"[Source: {c['source']}]\n{c['content']}" for c in context_chunks]
     )
-
-    messages = [
-        {"role": "user", "parts": [SYSTEM_PROMPT.format(context=context_text)]},
-        {"role": "model", "parts": ["Understood. I will answer based only on the provided context, in the user's language."]},
-    ]
-
-    # Gemini strictly requires alternating roles starting with 'user'
-    # Since we prepend system messages as 'user'/'model', the actual history MUST start with 'user'
-    # so the sequence remains: user -> model (sys prompt) -> user (history 1) -> model (history 2) -> user (current query)
-    valid_history = []
-    expected_next = "user"
-    for msg in (history or []):
-        raw_role = msg.get("role", "user")
-        role = "user" if raw_role == "user" else "model"
-        
-        # enforce alternation
-        if role == expected_next:
-            valid_history.append({"role": role, "parts": [msg.get("content", "")]})
-            expected_next = "model" if role == "user" else "user"
-
-    messages.extend(valid_history)
-    
-    messages.append({"role": "user", "parts": [query]})
-    return messages
+    return f"{SYSTEM_PROMPT.format(context=context_text)}\n\n{_language_instruction(query)}"
 
 
 def _try_gemini(query: str, context_chunks: list[dict], history: list, api_key: str, key_name: str, model_name: str, custom_timeout: float = 10.0) -> dict | None:
     """Try to get an answer from Gemini."""
+    client = None
     try:
         t0 = time.time()
-        genai.configure(api_key=api_key)
-        model = genai.GenerativeModel(model_name)
+        client = _get_gemini_client(api_key)
 
-        messages = _build_gemini_messages(query, context_chunks, history)
-        response = model.generate_content(
-            messages,
-            request_options={"timeout": custom_timeout, "retry": None},
+        response = client.models.generate_content(
+            model=model_name,
+            contents=_build_gemini_contents(query, history),
+            config=types.GenerateContentConfig(
+                systemInstruction=_build_gemini_system_instruction(query, context_chunks),
+                temperature=0.4,
+                maxOutputTokens=2048,
+                httpOptions=_get_gemini_http_options(custom_timeout),
+            ),
         )
 
         elapsed = time.time() - t0
@@ -290,24 +444,27 @@ def _try_gemini(query: str, context_chunks: list[dict], history: list, api_key: 
     except Exception as e:
         print(f"[WARNING] Gemini ({model_name} / {key_name}) failed: {e}", flush=True)
         raise Exception(f"Gemini {model_name} failed: {e}")
+    finally:
+        if client is not None:
+            client.close()
 
 
 def _try_gemini_greeting(query: str, api_key: str, key_name: str, model_name: str) -> dict | None:
     """Ultra-fast Gemini call for greetings — no RAG context needed."""
+    client = None
     try:
         t0 = time.time()
-        genai.configure(api_key=api_key)
-        model = genai.GenerativeModel(model_name)
+        client = _get_gemini_client(api_key)
 
-        messages = [
-            {"role": "user", "parts": [GREETING_PROMPT]},
-            {"role": "model", "parts": ["Understood. I'll greet the visitor warmly and invite them to ask about Rafael."]},
-            {"role": "user", "parts": [query]},
-        ]
-
-        response = model.generate_content(
-            messages,
-            request_options={"timeout": 8, "retry": retry.Retry(initial=0, maximum=0, multiplier=1.0, deadline=1.0)},
+        response = client.models.generate_content(
+            model=model_name,
+            contents=query,
+            config=types.GenerateContentConfig(
+                systemInstruction=f"{GREETING_PROMPT}\n\n{_language_instruction(query)}",
+                temperature=0.3,
+                maxOutputTokens=160,
+                httpOptions=_get_gemini_http_options(10.0),
+            ),
         )
 
         elapsed = time.time() - t0
@@ -322,6 +479,9 @@ def _try_gemini_greeting(query: str, api_key: str, key_name: str, model_name: st
     except Exception as e:
         print(f"[WARNING] Gemini greeting ({model_name}/{key_name}) failed: {e}", flush=True)
         raise Exception(f"Gemini greeting {model_name} failed: {e}")
+    finally:
+        if client is not None:
+            client.close()
 
 
 def _try_nvidia(
@@ -334,7 +494,7 @@ def _try_nvidia(
     max_retries: int = 1,
 ) -> dict | None:
     """Try NVIDIA Build API. Fast-fail on timeout (cold start), only retry on 429."""
-    api_key = os.getenv(api_key_env)
+    api_key = _get_nvidia_key(api_key_env)
     if not api_key:
         raise Exception(f"{api_key_env} not found in environment")
 
@@ -349,7 +509,7 @@ def _try_nvidia(
     )
 
     messages = [
-        {"role": "system", "content": SYSTEM_PROMPT.format(context=context_text)},
+        {"role": "system", "content": f"{SYSTEM_PROMPT.format(context=context_text)}\n\n{_language_instruction(query)}"},
     ]
 
     # Filter out empty or misaligned history for NVIDIA
@@ -438,7 +598,7 @@ def _query_category(query: str, history: list) -> str:
     if _is_greeting(query):
         return "greeting"
 
-    if len(history) >= 6 or len(query) > 250:
+    if len(history) >= 10 or len(query) > 250:
         return "complex"
 
     complex_keywords = [
@@ -479,42 +639,47 @@ def answer(query: str, history: list | None = None, page_context: str = "") -> d
         history_safe = history or []
         category = _query_category(query, history_safe)
         is_bio = _is_bio_query(query)
+        is_out_of_scope = _is_out_of_scope_personal_query(query)
+
+        if category == "greeting":
+            return {
+                "reply": _local_greeting_reply(query),
+                "sources": [],
+                "api_used": "local-greeting",
+            }
+
+        if is_bio and category != "complex":
+            return {
+                "reply": _local_bio_reply(query),
+                "sources": ["00_rafael_bio.md", "10_rafael_positioning.md"],
+                "api_used": "local-bio",
+            }
+
+        if _is_dbt_project_query(query):
+            return {
+                "reply": _local_dbt_project_reply(query),
+                "sources": ["05_project_elt.md", "01_competences.md"],
+                "api_used": "local-dbt-project",
+            }
+
+        if is_out_of_scope:
+            return {
+                "reply": _local_out_of_scope_reply(query),
+                "sources": [],
+                "api_used": "local-out-of-scope",
+            }
 
         # Resolve page context
         project_hint = _resolve_page_context(page_context)
         if project_hint:
             print(f"[CONTEXT] Page: {page_context} → Project: {project_hint}", flush=True)
 
-        key1 = os.getenv("GEMINI_API_KEY_1")
-        key2 = os.getenv("GEMINI_API_KEY_2")
+        gemini_keys = _get_gemini_keys()
+        key1 = gemini_keys[0] if gemini_keys else None
+        key2 = gemini_keys[1] if len(gemini_keys) > 1 else None
         errors = []
 
         print(f"[ROUTER] Query='{query[:60]}...' Category={category} | BioPath={is_bio}", flush=True)
-
-        # ── FAST IDENTITY PATH (No RAG, No Embedding) ──
-        if is_bio and category != "complex":
-            print("[FAST-PATH] Identity/Bio query detected. Skipping RAG.", flush=True)
-            # Tier 1: Gemini Key 2 (Flash Lite)
-            if key2:
-                try:
-                    res = _try_gemini(query, [], history_safe, key2, "KEY_2_Bio", GEMINI_FAST, custom_timeout=2.0)
-                    if res: return res
-                except Exception as e: errors.append(f"G2_Bio:{e}")
-            
-            # Tier 2: Gemini Key 1 (Normal)
-            if key1:
-                try:
-                    res = _try_gemini(query, [], history_safe, key1, "KEY_1_Bio", GEMINI_NORMAL, custom_timeout=2.5)
-                    if res: return res
-                except Exception as e: errors.append(f"G1_Bio:{e}")
-
-            # Tier 3: NVIDIA Fallback for Bio
-            try:
-                res = _try_nvidia(query, [], history_safe, "NVIDIA_API_KEY_1", KIMI_MODEL, "Kimi K2.5 Bio")
-                if res: return res
-            except Exception as e: errors.append(f"Kimi_Bio:{e}")
-
-            print("[WARNING] Fast-Bio-Path failed all tiers. Continuing to standard flow.", flush=True)
 
         # ── RAG retrieval (only for non-bio or complex queries) ──
         context_chunks = []
@@ -539,32 +704,25 @@ def answer(query: str, history: list | None = None, page_context: str = "") -> d
 
         # ── SIMPLE (short factual Q) ──
         if category == "simple":
-            # Tier 1: Gemini Flash Lite (cheapest, fastest)
-            if key2:
-                try:
-                    result = _try_gemini(query, context_chunks, history_safe, key2, "KEY_2", GEMINI_FAST, custom_timeout=2.0)
-                    if result:
-                        print(f"[PERF] Total simple time: {time.time() - t0_total:.2f}s", flush=True)
-                        return result
-                except Exception as e:
-                    errors.append(f"G2:{e}")
-
-            # Fallback to Gemini Normal
+            # Priority 1: Gemini Lite 3.1 (KEY 1)
             if key1:
                 try:
-                    result = _try_gemini(query, context_chunks, history_safe, key1, "KEY_1", GEMINI_NORMAL)
-                    if result:
-                        return result
-                except Exception as e:
-                    errors.append(f"G1:{e}")
+                    result = _try_gemini(query, context_chunks, history_safe, key1, "KEY_1", GEMINI_LITE_31, custom_timeout=2.5)
+                    if result: return result
+                except Exception as e: errors.append(f"G31:{e}")
+
+            # Priority 2: Gemini Lite Latest (KEY 2)
+            if key2:
+                try:
+                    result = _try_gemini(query, context_chunks, history_safe, key2, "KEY_2", GEMINI_LITE_LATEST, custom_timeout=2.5)
+                    if result: return result
+                except Exception as e: errors.append(f"GLatest:{e}")
 
             # Fallback 3: Kimi (NVIDIA)
             try:
                 result = _try_nvidia(query, context_chunks, history_safe, "NVIDIA_API_KEY_1", KIMI_MODEL, "Kimi K2.5")
-                if result:
-                    return result
-            except Exception as e:
-                errors.append(f"Kimi:{e}")
+                if result: return result
+            except Exception as e: errors.append(f"Kimi:{e}")
 
             # Fallback 4: GLM-5 (NVIDIA)
             try:
@@ -576,23 +734,25 @@ def answer(query: str, history: list | None = None, page_context: str = "") -> d
 
         # ── NORMAL (standard RAG question) ──
         elif category == "normal":
-            # Priority 1: Kimi K2.5 (8s — if warm, responds in ~5s)
-            try:
-                result = _try_nvidia(query, context_chunks, history_safe, "NVIDIA_API_KEY_1", KIMI_MODEL, "Kimi K2.5")
-                if result:
-                    print(f"[PERF] Total normal time: {time.time() - t0_total:.2f}s", flush=True)
-                    return result
-            except Exception as e:
-                errors.append(f"Kimi:{e}")
-
-            # Priority 2: Gemini Normal (reliable, ~3-5s)
+            # Priority 1: Gemini Lite 3.1
             if key1:
                 try:
-                    result = _try_gemini(query, context_chunks, history_safe, key1, "KEY_1", GEMINI_NORMAL)
-                    if result:
-                        return result
-                except Exception as e:
-                    errors.append(f"G1:{e}")
+                    result = _try_gemini(query, context_chunks, history_safe, key1, "KEY_1", GEMINI_LITE_31, custom_timeout=3.5)
+                    if result: return result
+                except Exception as e: errors.append(f"G31:{e}")
+
+            # Priority 2: Kimi K2.5 (Fast-ish complex analysis)
+            try:
+                result = _try_nvidia(query, context_chunks, history_safe, "NVIDIA_API_KEY_1", KIMI_MODEL, "Kimi K2.5")
+                if result: return result
+            except Exception as e: errors.append(f"Kimi:{e}")
+
+            # Priority 3: Gemini Normal
+            if key1:
+                try:
+                    result = _try_gemini(query, context_chunks, history_safe, key1, "KEY_1_Normal", GEMINI_NORMAL)
+                    if result: return result
+                except Exception as e: errors.append(f"GNormal:{e}")
 
             # Priority 3: GLM-5 (8s)
             try:
@@ -650,7 +810,7 @@ def answer(query: str, history: list | None = None, page_context: str = "") -> d
 
         # All APIs failed
         return {
-            "reply": f"All APIs are temporarily unavailable. Please try again later. / Toutes les APIs sont temporairement indisponibles. Veuillez réessayer plus tard. [DEBUG: {errors}]",
+            "reply": "All APIs are temporarily unavailable. Please try again later. / Toutes les APIs sont temporairement indisponibles. Veuillez réessayer plus tard.",
             "sources": [],
             "api_used": "none",
         }
